@@ -14,5 +14,9 @@ namespace DAL.Services.Users
         User Login(string usernameOrEmail, string plainPassword);
 
         void Register(User user, string plainPassword);
+
+        User? GetByUsername(string username);
+        void ChangePassword(string username, string oldPassword, string newPassword);
+
     }
 }
