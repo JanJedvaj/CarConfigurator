@@ -103,6 +103,44 @@ namespace DAL.Services.Users
             return user;
         }
 
+        public User? GetByUsername(string username)
+        {
+            if (string.IsNullOrWhiteSpace(username)) return null;
+            return _userRepository.GetByUsername(username.Trim());
+        }
+
+        public void ChangePassword(string username, string oldPassword, string newPassword)
+        {
+            if (string.IsNullOrWhiteSpace(username))
+                throw new InvalidOperationException("Username is required.");
+
+            if (string.IsNullOrWhiteSpace(oldPassword))
+                throw new InvalidOperationException("Old password is required.");
+
+            if (string.IsNullOrWhiteSpace(newPassword))
+                throw new InvalidOperationException("New password is required.");
+
+            if (newPassword.Length < 8)
+                throw new InvalidOperationException("New password should be at least 8 characters long.");
+
+            var user = _userRepository.GetByUsername(username.Trim());
+            if (user == null)
+                throw new InvalidOperationException("User not found.");
+
+            var currentHash = PasswordHashProvider.GetHash(oldPassword, user.PasswordSalt);
+            if (currentHash != user.PasswordHash)
+                throw new InvalidOperationException("Old password is incorrect.");
+
+            var newSalt = PasswordHashProvider.GetSalt();
+            var newHash = PasswordHashProvider.GetHash(newPassword, newSalt);
+
+            user.PasswordSalt = newSalt;
+            user.PasswordHash = newHash;
+
+            _userRepository.Update(user);
+        }
+
+
         private static void ValidateForCreate(User user, string plainPassword)
         {
             if (user == null) throw new ArgumentNullException(nameof(user));
