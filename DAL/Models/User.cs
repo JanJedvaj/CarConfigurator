@@ -20,11 +20,12 @@ public partial class User
     [StringLength(255)]
     public string Email { get; set; } = null!;
 
-    [MaxLength(256)]
-    public byte[] PasswordHash { get; set; } = null!;
+    [StringLength(256)]
+    public string PasswordHash { get; set; } = null!;
 
-    [MaxLength(256)]
-    public byte[] PasswordSalt { get; set; } = null!;
+    [StringLength(256)]
+    public string PasswordSalt { get; set; } = null!;
+
 
     [StringLength(20)]
     public string Role { get; set; } = null!;
