@@ -1,4 +1,5 @@
-﻿using DAL.Models;
+﻿using AutoMapper;
+using DAL.Models;
 using DAL.Security;
 using DAL.Services.Users;
 using Microsoft.AspNetCore.Authorization;
@@ -13,12 +14,18 @@ namespace WebApi.Controllers
     {
         private readonly IConfiguration _configuration;
         private readonly IUserService _service;
+        private readonly IMapper _mapper;
 
-        public AuthController(IConfiguration configuration, IUserService service)
+        public AuthController(
+            IConfiguration configuration,
+            IUserService service,
+            IMapper mapper)
         {
             _configuration = configuration;
             _service = service;
+            _mapper = mapper;
         }
+
 
         [HttpPost("register")]
         public ActionResult<UserRegisterDto> Register([FromBody] UserRegisterDto dto)
@@ -33,16 +40,16 @@ namespace WebApi.Controllers
                 if (_service.GetByUsername(username) != null)
                     return BadRequest("Username already taken");
 
-                var user = new User
-                {
-                    UserName = username,
-                    Email = dto.Email.Trim(),
-                    FirstName = dto.FirstName?.Trim(),
-                    LastName = dto.LastName?.Trim(),
-                    Phone = dto.Phone?.Trim(),
-                    Role = string.IsNullOrWhiteSpace(dto.Role) ? "User" : dto.Role.Trim(),
-                    IsActive = true
-                };
+    
+                var user = _mapper.Map<User>(dto);
+
+                user.UserName = username;
+                user.Email = dto.Email.Trim();
+                user.FirstName = dto.FirstName?.Trim();
+                user.LastName = dto.LastName?.Trim();
+                user.Phone = dto.Phone?.Trim();
+                user.Role = string.IsNullOrWhiteSpace(dto.Role) ? "User" : dto.Role.Trim();
+                user.IsActive = true;
 
                 _service.Register(user, dto.Password);
 
@@ -63,7 +70,6 @@ namespace WebApi.Controllers
             try
             {
                 var genericMessage = "Incorrect username or password";
-
                 var input = dto.UserNameOrEmail.Trim();
 
                 var user = _service.Login(input, dto.Password);
@@ -71,9 +77,15 @@ namespace WebApi.Controllers
                     return BadRequest(genericMessage);
 
                 var secureKey = _configuration["Jwt:SecureKey"];
-                var expirationMinutes = int.Parse(_configuration["Jwt:ExpirationMinutes"] ?? "60");
+                var expirationMinutes =
+                    int.Parse(_configuration["Jwt:ExpirationMinutes"] ?? "60");
 
-                var token = JwtTokenProvider.CreateToken(secureKey, expirationMinutes, user.UserName, user.Role);
+                var token = JwtTokenProvider.CreateToken(
+                    secureKey,
+                    expirationMinutes,
+                    user.UserName,
+                    user.Role
+                );
 
                 return Ok(token);
             }
@@ -83,6 +95,9 @@ namespace WebApi.Controllers
             }
         }
 
+        // =========================
+        // CHANGE PASSWORD
+        // =========================
         [Authorize]
         [HttpPost("changepassword")]
         public ActionResult ChangePassword([FromBody] ChangePasswordDto dto)
@@ -92,7 +107,12 @@ namespace WebApi.Controllers
 
             try
             {
-                _service.ChangePassword(dto.UserName.Trim(), dto.OldPassword, dto.NewPassword);
+                _service.ChangePassword(
+                    dto.UserName.Trim(),
+                    dto.OldPassword,
+                    dto.NewPassword
+                );
+
                 return Ok("Password changed successfully.");
             }
             catch (Exception ex)

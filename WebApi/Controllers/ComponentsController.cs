@@ -1,4 +1,5 @@
-﻿using DAL.Models;
+﻿using AutoMapper;
+using DAL.Models;
 using DAL.Services.Components;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -11,70 +12,72 @@ namespace WebApi.Controllers
     public class ComponentsController : ControllerBase
     {
         private readonly IComponentService _service;
+        private readonly IMapper _mapper;
 
-        public ComponentsController(IComponentService service)
+        public ComponentsController(
+            IComponentService service,
+            IMapper mapper)
         {
             _service = service;
+            _mapper = mapper;
         }
 
-        // Configurator: komponente po tipu (samo aktivne)
         [HttpGet("bytype/{componentTypeId:int}")]
         public ActionResult<IEnumerable<ComponentResponseDto>> GetByType(int componentTypeId)
         {
-            var list = _service.GetByComponentType(componentTypeId)
-                .Select(MapToDto);
+            var entities = _service.GetByComponentType(componentTypeId);
+            var dtos = entities.Select(x => _mapper.Map<ComponentResponseDto>(x));
 
-            return Ok(list);
+            return Ok(dtos);
         }
 
-        // Search (admin ili korisnik, po želji)
         [HttpGet("search")]
-        public ActionResult<object> Search([FromQuery] string? q, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] bool onlyActive = false)
+        public ActionResult<object> Search(
+            [FromQuery] string? q,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20,
+            [FromQuery] bool onlyActive = false)
         {
-            var items = _service.Search(q, page, pageSize, onlyActive).Select(MapToDto);
+            var entities = _service.Search(q, page, pageSize, onlyActive);
+            var items = entities.Select(x => _mapper.Map<ComponentResponseDto>(x));
             var total = _service.Count(q, onlyActive);
 
             return Ok(new { total, page, pageSize, items });
         }
 
-        // Admin CRUD
         [Authorize(Roles = "Admin")]
         [HttpGet]
-        public ActionResult<IEnumerable<ComponentResponseDto>> GetAll([FromQuery] bool onlyActive = false)
+        public ActionResult<IEnumerable<ComponentResponseDto>> GetAll(
+            [FromQuery] bool onlyActive = false)
         {
-            var list = _service.GetAll(onlyActive).Select(MapToDto);
-            return Ok(list);
+            var entities = _service.GetAll(onlyActive);
+            var dtos = entities.Select(x => _mapper.Map<ComponentResponseDto>(x));
+
+            return Ok(dtos);
         }
 
         [Authorize(Roles = "Admin")]
         [HttpGet("{id:int}")]
         public ActionResult<ComponentResponseDto> GetById(int id)
         {
-            var x = _service.GetById(id);
-            if (x == null) return NotFound();
-            return Ok(MapToDto(x));
+            var entity = _service.GetById(id);
+            if (entity == null)
+                return NotFound();
+
+            return Ok(_mapper.Map<ComponentResponseDto>(entity));
         }
 
         [Authorize(Roles = "Admin")]
         [HttpPost]
         public ActionResult Create([FromBody] ComponentCreateDto dto)
         {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
 
             try
             {
-                var entity = new Component
-                {
-                    Name = dto.Name.Trim(),
-                    Title = dto.Title.Trim(),
-                    Description = dto.Description,
-                    Price = dto.Price,
-                    IsActive = dto.IsActive,
-                    SortOrder = dto.SortOrder,
-                    ComponentTypeId = dto.ComponentTypeId,
-                    ImageId = dto.ImageId,
-                    CreatedAt = DateTime.UtcNow
-                };
+                var entity = _mapper.Map<Component>(dto);
+                entity.CreatedAt = DateTime.UtcNow;
 
                 _service.Create(entity);
                 return Ok();
@@ -89,24 +92,14 @@ namespace WebApi.Controllers
         [HttpPut]
         public ActionResult Update([FromBody] ComponentUpdateDto dto)
         {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
 
             try
             {
-                var entity = new Component
-                {
-                    Id = dto.Id,
-                    Name = dto.Name.Trim(),
-                    Title = dto.Title.Trim(),
-                    Description = dto.Description,
-                    Price = dto.Price,
-                    IsActive = dto.IsActive,
-                    SortOrder = dto.SortOrder,
-                    ComponentTypeId = dto.ComponentTypeId,
-                    ImageId = dto.ImageId
-                };
-
+                var entity = _mapper.Map<Component>(dto);
                 _service.Update(entity);
+
                 return Ok();
             }
             catch (Exception ex)
@@ -128,24 +121,6 @@ namespace WebApi.Controllers
             {
                 return BadRequest(ex.Message);
             }
-        }
-
-        private static ComponentResponseDto MapToDto(Component x)
-        {
-            return new ComponentResponseDto
-            {
-                Id = x.Id,
-                Name = x.Name,
-                Title = x.Title,
-                Description = x.Description,
-                Price = x.Price,
-                IsActive = x.IsActive,
-                SortOrder = x.SortOrder,
-                ComponentTypeId = x.ComponentTypeId,
-                ComponentTypeName = x.ComponentType?.Name ?? "",
-                ImageId = x.ImageId,
-                ImageUrl = x.Image?.StoragePathOrUrl
-            };
         }
     }
 }

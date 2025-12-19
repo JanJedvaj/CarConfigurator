@@ -1,4 +1,5 @@
-﻿using DAL.Models;
+﻿using AutoMapper;
+using DAL.Models;
 using DAL.Services.Images;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -11,30 +12,26 @@ namespace WebApi.Controllers
     public class ImagesController : ControllerBase
     {
         private readonly IImageService _service;
+        private readonly IMapper _mapper;
 
-        public ImagesController(IImageService service)
+        public ImagesController(
+            IImageService service,
+            IMapper mapper)
         {
             _service = service;
+            _mapper = mapper;
         }
 
         [HttpGet("search")]
-        public ActionResult<object> Search([FromQuery] string? q, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+        public ActionResult<object> Search(
+            [FromQuery] string? q,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
         {
-            var items = _service.SearchByFileName(q, page, pageSize)
-                .Select(x => new ImageResponseDto
-                {
-                    Id = x.Id,
-                    FileName = x.FileName,
-                    ContentType = x.ContentType,
-                    Length = x.Length,
-                    StoragePathOrUrl = x.StoragePathOrUrl,
-                    UploadedAt = x.UploadedAt,
-                    AltText = x.AltText,
-                    Width = x.Width,
-                    Height = x.Height
-                });
-
+            var entities = _service.SearchByFileName(q, page, pageSize);
+            var items = entities.Select(x => _mapper.Map<ImageResponseDto>(x));
             var total = _service.Count(q);
+
             return Ok(new { total, page, pageSize, items });
         }
 
@@ -42,21 +39,13 @@ namespace WebApi.Controllers
         [HttpPost]
         public ActionResult Create([FromBody] ImageCreateDto dto)
         {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
 
             try
             {
-                var entity = new Image
-                {
-                    FileName = dto.FileName.Trim(),
-                    ContentType = dto.ContentType.Trim(),
-                    Length = dto.Length,
-                    StoragePathOrUrl = dto.StoragePathOrUrl.Trim(),
-                    AltText = dto.AltText,
-                    Width = dto.Width,
-                    Height = dto.Height,
-                    UploadedAt = DateTime.UtcNow
-                };
+                var entity = _mapper.Map<Image>(dto);
+                entity.UploadedAt = DateTime.UtcNow;
 
                 var id = _service.Create(entity);
                 return Ok(new { id });
