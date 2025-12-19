@@ -1,4 +1,5 @@
-﻿using DAL.Models;
+﻿using AutoMapper;
+using DAL.Models;
 using DAL.Services.ComponentTypes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -11,85 +12,61 @@ namespace WebApi.Controllers
     public class ComponentTypesController : ControllerBase
     {
         private readonly IComponentTypeService _service;
+        private readonly IMapper _mapper;
 
-        public ComponentTypesController(IComponentTypeService service)
+        public ComponentTypesController(
+            IComponentTypeService service,
+            IMapper mapper)
         {
             _service = service;
+            _mapper = mapper;
         }
 
+        // =========================
         // Configurator (user)
+        // =========================
         [HttpGet("configurator")]
         public ActionResult<IEnumerable<ComponentTypeResponseDto>> GetForConfigurator()
         {
-            var types = _service.GetForConfigurator()
-                .Select(x => new ComponentTypeResponseDto
-                {
-                    Id = x.Id,
-                    Name = x.Name,
-                    MinSelect = x.MinSelect,
-                    MaxSelect = x.MaxSelect,
-                    DisplayOrder = x.DisplayOrder,
-                    IsActive = x.IsActive
-                });
+            var entities = _service.GetForConfigurator();
+            var dtos = entities.Select(x => _mapper.Map<ComponentTypeResponseDto>(x));
 
-            return Ok(types);
+            return Ok(dtos);
         }
 
-        // Admin CRUD
         [Authorize(Roles = "Admin")]
         [HttpGet]
         public ActionResult<IEnumerable<ComponentTypeResponseDto>> GetAll()
         {
-            var types = _service.GetAll()
-                .Select(x => new ComponentTypeResponseDto
-                {
-                    Id = x.Id,
-                    Name = x.Name,
-                    MinSelect = x.MinSelect,
-                    MaxSelect = x.MaxSelect,
-                    DisplayOrder = x.DisplayOrder,
-                    IsActive = x.IsActive
-                });
+            var entities = _service.GetAll();
+            var dtos = entities.Select(x => _mapper.Map<ComponentTypeResponseDto>(x));
 
-            return Ok(types);
+            return Ok(dtos);
         }
 
         [Authorize(Roles = "Admin")]
         [HttpGet("{id:int}")]
         public ActionResult<ComponentTypeResponseDto> GetById(int id)
         {
-            var x = _service.GetById(id);
-            if (x == null) return NotFound();
+            var entity = _service.GetById(id);
+            if (entity == null)
+                return NotFound();
 
-            return Ok(new ComponentTypeResponseDto
-            {
-                Id = x.Id,
-                Name = x.Name,
-                MinSelect = x.MinSelect,
-                MaxSelect = x.MaxSelect,
-                DisplayOrder = x.DisplayOrder,
-                IsActive = x.IsActive
-            });
+            return Ok(_mapper.Map<ComponentTypeResponseDto>(entity));
         }
 
         [Authorize(Roles = "Admin")]
         [HttpPost]
         public ActionResult Create([FromBody] ComponentTypeCreateDto dto)
         {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
 
             try
             {
-                var entity = new ComponentType
-                {
-                    Name = dto.Name.Trim(),
-                    MinSelect = dto.MinSelect,
-                    MaxSelect = dto.MaxSelect,
-                    DisplayOrder = dto.DisplayOrder,
-                    IsActive = dto.IsActive
-                };
-
+                var entity = _mapper.Map<ComponentType>(dto);
                 var id = _service.Add(entity);
+
                 return CreatedAtAction(nameof(GetById), new { id }, new { id });
             }
             catch (Exception ex)
@@ -102,21 +79,14 @@ namespace WebApi.Controllers
         [HttpPut]
         public ActionResult Update([FromBody] ComponentTypeUpdateDto dto)
         {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
 
             try
             {
-                var entity = new ComponentType
-                {
-                    Id = dto.Id,
-                    Name = dto.Name.Trim(),
-                    MinSelect = dto.MinSelect,
-                    MaxSelect = dto.MaxSelect,
-                    DisplayOrder = dto.DisplayOrder,
-                    IsActive = dto.IsActive
-                };
-
+                var entity = _mapper.Map<ComponentType>(dto);
                 _service.Update(entity);
+
                 return Ok();
             }
             catch (Exception ex)

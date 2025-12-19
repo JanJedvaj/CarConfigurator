@@ -9,7 +9,7 @@ namespace WebApi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize] // konfiguracije su korisničke
+    [Authorize] 
     public class ConfigurationsController : ControllerBase
     {
         private readonly IConfigurationService _service;
@@ -124,7 +124,7 @@ namespace WebApi.Controllers
             }
         }
 
-        // Add component (provjere kompatibilnosti + maxSelect su u service-u)
+        //Add component (provjere kompatibilnosti + maxSelect su u service-u)
         [HttpPost("{configurationId:int}/components")]
         public ActionResult AddComponent(int configurationId, [FromBody] ConfigurationAddComponentDto dto)
         {
