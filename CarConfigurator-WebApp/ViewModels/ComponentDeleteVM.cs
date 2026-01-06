@@ -1,0 +1,12 @@
+﻿namespace CarConfigurator_WebApp.ViewModels
+{
+    public class ComponentDeleteVM
+    {
+        public int Id { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string ComponentTypeName { get; set; } = string.Empty;
+        public decimal Price { get; set; }
+        public bool IsActive { get; set; }
+    }
+}

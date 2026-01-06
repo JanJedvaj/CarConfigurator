@@ -1,0 +1,35 @@
+﻿@model CarConfigurator_WebApp.ViewModels.LoginViewModel
+
+@{
+    ViewData["Title"] = "Prijava";
+}
+
+<h2>Prijava</h2>
+
+<form asp-action="Login" method="post">
+    @Html.AntiForgeryToken()
+
+    <input type="hidden" asp-for="ReturnUrl" />
+
+    <div class="mb-3">
+        <label asp-for="UserNameOrEmail" class="form-label"></label>
+        <input asp-for="UserNameOrEmail" class="form-control" />
+        <span asp-validation-for="UserNameOrEmail" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Password" class="form-label"></label>
+        <input asp-for="Password" class="form-control" />
+        <span asp-validation-for="Password" class="text-danger"></span>
+    </div>
+
+    <div class="text-danger">
+        @Html.ValidationSummary(excludePropertyErrors: true)
+    </div>
+
+    <button type="submit" class="btn btn-primary">Prijavi se</button>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
