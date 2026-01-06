@@ -14,7 +14,7 @@ namespace DAL.Services.Components
         // Configurator helpers
         IEnumerable<Component> GetByComponentType(int componentTypeId);
 
-        // Poželjno: search + paging
+        // search + paging
         IEnumerable<Component> Search(string? query, int page, int pageSize, bool onlyActive = false);
         int Count(string? query, bool onlyActive = false);
 

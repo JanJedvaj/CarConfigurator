@@ -1,0 +1,79 @@
+﻿@model CarConfigurator_WebApp.ViewModels.ComponentEditVM
+
+@{
+    ViewData["Title"] = "Edit Component";
+}
+
+<h2>Edit Component</h2>
+
+<form asp-action="Edit" method="post">
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="Id" />
+
+    <div class="text-danger">
+        @Html.ValidationSummary(excludePropertyErrors: true)
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Name" class="form-label"></label>
+        <input asp-for="Name" class="form-control" />
+        <span asp-validation-for="Name" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Title" class="form-label"></label>
+        <input asp-for="Title" class="form-control" />
+        <span asp-validation-for="Title" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Description" class="form-label"></label>
+        <textarea asp-for="Description" class="form-control" rows="3"></textarea>
+        <span asp-validation-for="Description" class="text-danger"></span>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4 mb-3">
+            <label asp-for="Price" class="form-label"></label>
+            <input asp-for="Price" class="form-control" />
+            <span asp-validation-for="Price" class="text-danger"></span>
+        </div>
+
+        <div class="col-md-4 mb-3">
+            <label asp-for="SortOrder" class="form-label"></label>
+            <input asp-for="SortOrder" class="form-control" />
+            <span asp-validation-for="SortOrder" class="text-danger"></span>
+        </div>
+
+        <div class="col-md-4 mb-3 d-flex align-items-end">
+            <div class="form-check">
+                <input asp-for="IsActive" class="form-check-input" />
+                <label asp-for="IsActive" class="form-check-label"></label>
+            </div>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="ComponentTypeId" class="form-label"></label>
+        <select asp-for="ComponentTypeId" asp-items="Model.ComponentTypes" class="form-select">
+            <option value="">(Select type)</option>
+        </select>
+        <span asp-validation-for="ComponentTypeId" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="ImageId" class="form-label"></label>
+        <input asp-for="ImageId" class="form-control" />
+        <div class="form-text">Optional.</div>
+        <span asp-validation-for="ImageId" class="text-danger"></span>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Save</button>
+        <a asp-action="Index" class="btn btn-outline-secondary">Back</a>
+    </div>
+</form>
+
+@section Scripts {
+        <partial name="_ValidationScriptsPartial" />
+}
