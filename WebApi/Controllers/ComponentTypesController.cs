@@ -22,9 +22,6 @@ namespace WebApi.Controllers
             _mapper = mapper;
         }
 
-        // =========================
-        // Configurator (user)
-        // =========================
         [HttpGet("configurator")]
         public ActionResult<IEnumerable<ComponentTypeResponseDto>> GetForConfigurator()
         {
