@@ -1,0 +1,55 @@
+﻿@model CarConfigurator_WebApp.ViewModels.ComponentTypeCreateVM
+
+@{
+    ViewData["Title"] = "Create Component Type";
+}
+
+<h2>Create Component Type</h2>
+
+<form asp-action="Create" method="post">
+    @Html.AntiForgeryToken()
+
+    <div class="text-danger">
+        @Html.ValidationSummary(excludePropertyErrors: true)
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Name" class="form-label"></label>
+        <input asp-for="Name" class="form-control" />
+        <span asp-validation-for="Name" class="text-danger"></span>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4 mb-3">
+            <label asp-for="MinSelect" class="form-label"></label>
+            <input asp-for="MinSelect" class="form-control" />
+            <span asp-validation-for="MinSelect" class="text-danger"></span>
+        </div>
+
+        <div class="col-md-4 mb-3">
+            <label asp-for="MaxSelect" class="form-label"></label>
+            <input asp-for="MaxSelect" class="form-control" />
+            <span asp-validation-for="MaxSelect" class="text-danger"></span>
+        </div>
+
+        <div class="col-md-4 mb-3">
+            <label asp-for="DisplayOrder" class="form-label"></label>
+            <input asp-for="DisplayOrder" class="form-control" />
+            <span asp-validation-for="DisplayOrder" class="text-danger"></span>
+        </div>
+    </div>
+
+    <div class="mb-3 form-check">
+        <input asp-for="IsActive" class="form-check-input" />
+        <label asp-for="IsActive" class="form-check-label"></label>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Create</button>
+        <a asp-action="Index" class="btn btn-outline-secondary">Back</a>
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
