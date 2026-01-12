@@ -1,0 +1,24 @@
+﻿@model CarConfigurator_WebApp.ViewModels.ItemDetailsVM
+
+@{
+    ViewData["Title"] = "Item Details";
+}
+
+<h2>@Model.Title</h2>
+
+<div class="card p-3">
+    <dl class="row">
+        <dt class="col-sm-3">Type</dt>
+        <dd class="col-sm-9">@Model.ComponentTypeName</dd>
+
+        <dt class="col-sm-3">Description</dt>
+        <dd class="col-sm-9">@Model.Description</dd>
+
+        <dt class="col-sm-3">Price</dt>
+        <dd class="col-sm-9">@Model.Price.ToString("C")</dd>
+    </dl>
+
+    <a asp-action="Index" class="btn btn-secondary">
+        Back to list
+    </a>
+</div>

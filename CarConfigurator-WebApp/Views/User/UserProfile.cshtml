@@ -1,0 +1,98 @@
+﻿@model CarConfigurator_WebApp.ViewModels.AdminProfileVM
+
+@{
+    ViewData["Title"] = "My Profile";
+}
+
+<h2>My Profile</h2>
+
+<div id="msgSuccess" class="alert alert-success d-none"></div>
+<div id="msgError" class="alert alert-danger d-none"></div>
+
+<form id="profileForm" class="card p-3">
+    @Html.AntiForgeryToken()
+
+    <input type="hidden" asp-for="Id" />
+
+    <div class="mb-3">
+        <label asp-for="UserName" class="form-label"></label>
+        <input asp-for="UserName" class="form-control" disabled />
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Email" class="form-label"></label>
+        <input asp-for="Email" class="form-control" />
+        <span asp-validation-for="Email" class="text-danger"></span>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4 mb-3">
+            <label asp-for="FirstName" class="form-label"></label>
+            <input asp-for="FirstName" class="form-control" />
+            <span asp-validation-for="FirstName" class="text-danger"></span>
+        </div>
+
+        <div class="col-md-4 mb-3">
+            <label asp-for="LastName" class="form-label"></label>
+            <input asp-for="LastName" class="form-control" />
+            <span asp-validation-for="LastName" class="text-danger"></span>
+        </div>
+
+        <div class="col-md-4 mb-3">
+            <label asp-for="Phone" class="form-label"></label>
+            <input asp-for="Phone" class="form-control" />
+            <span asp-validation-for="Phone" class="text-danger"></span>
+        </div>
+    </div>
+
+    <button type="button" id="btnSave" class="btn btn-primary">
+        Save
+    </button>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        function showSuccess(msg) {
+            $("#msgError").addClass("d-none").text("");
+            $("#msgSuccess").removeClass("d-none").text(msg);
+        }
+
+        function showError(msg) {
+            $("#msgSuccess").addClass("d-none").text("");
+            $("#msgError").removeClass("d-none").text(msg);
+        }
+
+        $("#btnSave").on("click", function () {
+            const token = $('input[name="__RequestVerificationToken"]').val();
+
+            const payload = {
+                id: $("#Id").val(),
+                email: $("#Email").val(),
+                firstName: $("#FirstName").val(),
+                lastName: $("#LastName").val(),
+                phone: $("#Phone").val()
+            };
+
+            $.ajax({
+                url: '@Url.Action("UpdateUserProfile", "User")',
+                type: 'POST',
+                headers: {
+                    'RequestVerificationToken': token
+                },
+                data: payload,
+                success: function (res) {
+                    showSuccess(res.message || "Updated.");
+                },
+                error: function (xhr) {
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        showError(xhr.responseJSON.message);
+                    } else {
+                        showError("Update failed.");
+                    }
+                }
+            });
+        });
+    </script>
+}
