@@ -1,0 +1,88 @@
+﻿@model CarConfigurator_WebApp.ViewModels.CompatibilitiesIndexVM
+
+@{
+    ViewData["Title"] = "Component Compatibilities";
+}
+
+<h2>Component Compatibilities</h2>
+
+<form asp-action="Create" method="post" class="card p-3 mb-4">
+    @Html.AntiForgeryToken()
+
+    <div class="text-danger">
+        @Html.ValidationSummary(excludePropertyErrors: true)
+    </div>
+
+    <div class="row">
+        <div class="col-md-4 mb-3">
+            <label asp-for="Create.ComponentId" class="form-label"></label>
+            <select asp-for="Create.ComponentId"
+                    asp-items="Model.Create.Components"
+                    class="form-select">
+                <option value="">(select)</option>
+            </select>
+        </div>
+
+        <div class="col-md-4 mb-3">
+            <label asp-for="Create.CompatibleWithComponentId" class="form-label"></label>
+            <select asp-for="Create.CompatibleWithComponentId"
+                    asp-items="Model.Create.Components"
+                    class="form-select">
+                <option value="">(select)</option>
+            </select>
+        </div>
+
+        <div class="col-md-2 mb-3 d-flex align-items-end">
+            <div class="form-check">
+                <input asp-for="Create.IsAllowed" class="form-check-input" />
+                <label asp-for="Create.IsAllowed" class="form-check-label"></label>
+            </div>
+        </div>
+
+        <div class="col-md-2 mb-3 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary w-100">
+                Save Rule
+            </button>
+        </div>
+    </div>
+</form>
+
+<table class="table table-striped table-hover">
+    <thead>
+        <tr>
+            <th>Component</th>
+            <th>Compatible With</th>
+            <th>Allowed</th>
+            <th class="text-end">Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (Model.Items.Count == 0)
+        {
+            <tr>
+                <td colspan="4" class="text-muted">No rules defined.</td>
+            </tr>
+        }
+        else
+        {
+            foreach (var item in Model.Items)
+            {
+                <tr>
+                    <td>@item.ComponentName</td>
+                    <td>@item.CompatibleWithComponentName</td>
+                    <td>@(item.IsAllowed ? "Yes" : "No")</td>
+                    <td class="text-end">
+                        <form asp-action="Delete" method="post" class="d-inline">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="componentId" value="@item.ComponentId" />
+                            <input type="hidden" name="compatibleWithComponentId" value="@item.CompatibleWithComponentId" />
+                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                Delete
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+            }
+        }
+    </tbody>
+</table>
