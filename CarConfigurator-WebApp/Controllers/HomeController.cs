@@ -15,6 +15,14 @@ namespace CarConfigurator_WebApp.Controllers
 
         public IActionResult Index()
         {
+            if (User?.Identity?.IsAuthenticated == true)
+            {
+                if (User.IsInRole("Admin"))
+                    return RedirectToAction("Index", "Components");
+
+                return RedirectToAction("Index", "Items");
+            }
+
             return View();
         }
 

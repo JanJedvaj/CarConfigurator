@@ -6,6 +6,11 @@
 
 <h2>@Model.Title</h2>
 
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+
 <div class="card p-3">
     <dl class="row">
         <dt class="col-sm-3">Type</dt>
@@ -15,10 +20,20 @@
         <dd class="col-sm-9">@Model.Description</dd>
 
         <dt class="col-sm-3">Price</dt>
-        <dd class="col-sm-9">@Model.Price.ToString("C")</dd>
+        <dd class="col-sm-9">@Model.Price.ToString("0.00")</dd>
     </dl>
 
-    <a asp-action="Index" class="btn btn-secondary">
-        Back to list
-    </a>
+    <div class="d-flex gap-2">
+        <a asp-action="Index" class="btn btn-outline-secondary">
+            Back to list
+        </a>
+
+        <form asp-controller="Configurations" asp-action="AddComponent" method="post" class="d-inline">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="componentId" value="@Model.Id" />
+            <button type="submit" class="btn btn-primary">
+                Add to my configuration
+            </button>
+        </form>
+    </div>
 </div>

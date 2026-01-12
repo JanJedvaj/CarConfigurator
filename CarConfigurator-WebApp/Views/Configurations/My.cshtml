@@ -1,0 +1,110 @@
+﻿@model CarConfigurator_WebApp.ViewModels.MyConfigurationVM
+
+@{
+    ViewData["Title"] = "My Configuration";
+}
+
+<h2>My Configuration</h2>
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+
+<div class="row g-3 mb-3">
+    <!-- Choose existing configuration -->
+    <div class="col-md-6">
+        <div class="card p-3">
+            <h5 class="mb-3">Choose configuration</h5>
+
+            <form method="get" asp-action="My">
+                <div class="row g-2 align-items-end">
+                    <div class="col-8">
+                        <label class="form-label">Configuration</label>
+                        <select class="form-select" name="configurationId" asp-items="Model.Configurations"></select>
+                    </div>
+                    <div class="col-4">
+                        <button class="btn btn-primary w-100" type="submit">Open</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Create new configuration -->
+    <div class="col-md-6">
+        <div class="card p-3">
+            <h5 class="mb-3">Create new</h5>
+
+            <form method="post" asp-action="CreateNew">
+                @Html.AntiForgeryToken()
+                <div class="row g-2 align-items-end">
+                    <div class="col-8">
+                        <label class="form-label">Name</label>
+                        <input class="form-control" name="name" value="" placeholder="e.g. Sport build" />
+                    </div>
+                    <div class="col-4">
+                        <button class="btn btn-success w-100" type="submit">Create</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="card p-3 mb-3">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <div class="text-muted">Current</div>
+            <div class="fw-semibold">@Model.Name</div>
+        </div>
+        <div class="text-end">
+            <div class="text-muted">Total</div>
+            <div class="fs-5 fw-bold">@Model.TotalPrice.ToString("0.00")</div>
+        </div>
+    </div>
+</div>
+
+@if (Model.Items.Count == 0)
+{
+    <div class="alert alert-info">
+        Configuration is empty. Go to <a asp-controller="Items" asp-action="Index">Items</a> and add components.
+    </div>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th>Component</th>
+                <th class="text-end">Price</th>
+                <th class="text-end">Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Model.Items)
+            {
+                <tr>
+                    <td>@item.ComponentTypeName</td>
+                    <td>@item.Title</td>
+                    <td class="text-end">@item.Price.ToString("0.00")</td>
+                    <td class="text-end">
+                        <form asp-action="RemoveComponent" method="post" class="d-inline">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="configurationId" value="@Model.ConfigurationId" />
+                            <input type="hidden" name="componentId" value="@item.ComponentId" />
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <form asp-action="Clear" method="post">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="configurationId" value="@Model.ConfigurationId" />
+        <button type="submit" class="btn btn-outline-danger">Clear All</button>
+    </form>
+}
