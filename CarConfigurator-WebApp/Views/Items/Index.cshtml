@@ -1,0 +1,90 @@
+﻿@model CarConfigurator_WebApp.ViewModels.ItemsIndexVM
+
+@{
+    ViewData["Title"] = "Items";
+}
+
+<h2>Available Components</h2>
+
+<form method="get" class="row mb-3">
+    <div class="col-md-4">
+        <input type="text"
+               name="query"
+               value="@Model.Query"
+               class="form-control"
+               placeholder="Search..." />
+    </div>
+
+    <div class="col-md-4">
+        <select name="componentTypeId" class="form-select">
+            <option value="">All types</option>
+            @foreach (var t in Model.ComponentTypes)
+            {
+                <option value="@t.Value" selected="@t.Selected">@t.Text</option>
+            }
+        </select>
+    </div>
+
+    <div class="col-md-2">
+        <button type="submit" class="btn btn-primary w-100">Search</button>
+    </div>
+</form>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Title</th>
+            <th>Type</th>
+            <th>Price</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (!Model.Items.Any())
+        {
+            <tr>
+                <td colspan="4" class="text-muted">No items found.</td>
+            </tr>
+        }
+        else
+        {
+            foreach (var item in Model.Items)
+            {
+                <tr>
+                    <td>@item.Title</td>
+                    <td>@item.ComponentTypeName</td>
+                    <td>@item.Price.ToString("C")</td>
+                    <td class="text-end">
+                        <a asp-action="Details"
+                           asp-route-id="@item.Id"
+                           class="btn btn-sm btn-outline-primary">
+                            Details
+                        </a>
+                    </td>
+                </tr>
+            }
+        }
+    </tbody>
+</table>
+
+<nav>
+    <ul class="pagination">
+        <li class="page-item @(Model.HasPrevious ? "" : "disabled")">
+            <a class="page-link"
+               asp-route-page="@(Model.Page - 1)"
+               asp-route-query="@Model.Query"
+               asp-route-componentTypeId="@Model.ComponentTypeId">
+                Previous
+            </a>
+        </li>
+
+        <li class="page-item @(Model.HasNext ? "" : "disabled")">
+            <a class="page-link"
+               asp-route-page="@(Model.Page + 1)"
+               asp-route-query="@Model.Query"
+               asp-route-componentTypeId="@Model.ComponentTypeId">
+                Next
+            </a>
+        </li>
+    </ul>
+</nav>
