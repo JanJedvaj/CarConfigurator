@@ -4,9 +4,9 @@
     ViewData["Title"] = "Items";
 }
 
-<h2>Available Components</h2>
+<h2>Items</h2>
 
-<form method="get" class="row mb-3">
+<form id="itemsSearchForm" class="row mb-3">
     <div class="col-md-4">
         <input type="text"
                name="query"
@@ -28,63 +28,49 @@
     <div class="col-md-2">
         <button type="submit" class="btn btn-primary w-100">Search</button>
     </div>
+
+    <div class="col-md-2">
+        <a class="btn btn-outline-secondary w-100" href="@Url.Action("Index","Items")">Reset</a>
+    </div>
 </form>
 
-<table class="table table-striped">
-    <thead>
-        <tr>
-            <th>Title</th>
-            <th>Type</th>
-            <th>Price</th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-        @if (!Model.Items.Any())
-        {
-            <tr>
-                <td colspan="4" class="text-muted">No items found.</td>
-            </tr>
-        }
-        else
-        {
-            foreach (var item in Model.Items)
-            {
-                <tr>
-                    <td>@item.Title</td>
-                    <td>@item.ComponentTypeName</td>
-                    <td>@item.Price.ToString("C")</td>
-                    <td class="text-end">
-                        <a asp-action="Details"
-                           asp-route-id="@item.Id"
-                           class="btn btn-sm btn-outline-primary">
-                            Details
-                        </a>
-                    </td>
-                </tr>
-            }
-        }
-    </tbody>
-</table>
+<div id="itemsContainer">
+    @await Html.PartialAsync("_ItemsTablePartial", Model)
+</div>
 
-<nav>
-    <ul class="pagination">
-        <li class="page-item @(Model.HasPrevious ? "" : "disabled")">
-            <a class="page-link"
-               asp-route-page="@(Model.Page - 1)"
-               asp-route-query="@Model.Query"
-               asp-route-componentTypeId="@Model.ComponentTypeId">
-                Previous
-            </a>
-        </li>
+@section Scripts {
+    <script>
+        function loadItems(page) {
+            const form = $("#itemsSearchForm");
+            const query = form.find('input[name="query"]').val();
+            const componentTypeId = form.find('select[name="componentTypeId"]').val();
 
-        <li class="page-item @(Model.HasNext ? "" : "disabled")">
-            <a class="page-link"
-               asp-route-page="@(Model.Page + 1)"
-               asp-route-query="@Model.Query"
-               asp-route-componentTypeId="@Model.ComponentTypeId">
-                Next
-            </a>
-        </li>
-    </ul>
-</nav>
+            $.ajax({
+                url: '@Url.Action("ListPartial", "Items")',
+                type: 'GET',
+                data: {
+                    query: query,
+                    componentTypeId: componentTypeId,
+                    page: page
+                },
+                success: function (html) {
+                    $("#itemsContainer").html(html);
+                }
+            });
+        }
+
+        // Search submit -> AJAX load page 1
+        $("#itemsSearchForm").on("submit", function (e) {
+            e.preventDefault();
+            loadItems(1);
+        });
+
+        // Pagination click -> AJAX load selected page (event delegation)
+        $("#itemsContainer").on("click", "a.items-page", function (e) {
+            e.preventDefault();
+            const page = $(this).data("page");
+            if (!page) return;
+            loadItems(page);
+        });
+    </script>
+}

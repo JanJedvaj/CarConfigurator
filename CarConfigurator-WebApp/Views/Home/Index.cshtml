@@ -1,8 +1,48 @@
 ﻿@{
-    ViewData["Title"] = "Home Page";
+    ViewData["Title"] = "Welcome";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+<div class="text-center mt-5">
+    <h1 class="display-4 fw-bold">Car Configurator</h1>
+
+    <p class="lead mt-3">
+        Build your perfect car by choosing engine, paint, wheels and interior.
+    </p>
+
+    <p class="text-muted">
+        Create your own configuration with real-time compatibility checks.
+    </p>
+
+    <div class="mt-4">
+        <a asp-controller="User"
+           asp-action="Login"
+           class="btn btn-primary btn-lg px-5">
+            Start configuring
+        </a>
+    </div>
+</div>
+
+<hr class="my-5" />
+
+<div class="row text-center">
+    <div class="col-md-4">
+        <h5>Components</h5>
+        <p class="text-muted">
+            Choose from engines, transmissions, paints, wheels and interiors.
+        </p>
+    </div>
+
+    <div class="col-md-4">
+        <h5>Compatibility</h5>
+        <p class="text-muted">
+            Only compatible components can be combined.
+        </p>
+    </div>
+
+    <div class="col-md-4">
+        <h5>Price calculation</h5>
+        <p class="text-muted">
+            Total price is calculated automatically.
+        </p>
+    </div>
 </div>
