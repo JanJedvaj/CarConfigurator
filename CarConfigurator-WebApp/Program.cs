@@ -13,6 +13,7 @@ using DAL.Services.Configurations;
 using DAL.Services.Images;
 using DAL.Services.Logs;
 using DAL.Services.Users;
+using CarConfigurator_WebApp.MappingProfiles;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -65,7 +66,7 @@ builder.Services.AddScoped<ILogService, LogService>();
 builder.Services.AddScoped<IUserService, UserService>();
 
 // AutoMapper (MVC MappingProfiles folder)
-//builder.Services.AddAutoMapper(typeof(Program));
+builder.Services.AddAutoMapper(typeof(Program));
 
 var app = builder.Build();
 

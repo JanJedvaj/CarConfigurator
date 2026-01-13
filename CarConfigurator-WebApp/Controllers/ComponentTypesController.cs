@@ -1,4 +1,5 @@
-﻿using CarConfigurator_WebApp.ViewModels;
+﻿using AutoMapper;
+using CarConfigurator_WebApp.ViewModels;
 using DAL.Models;
 using DAL.Services.ComponentTypes;
 using Microsoft.AspNetCore.Authorization;
@@ -11,14 +12,15 @@ namespace CarConfigurator_WebApp.Controllers
     {
         private readonly IComponentTypeService _componentTypeService;
         private readonly IConfiguration _configuration;
+        private readonly IMapper _mapper;
 
-        public ComponentTypesController(IComponentTypeService componentTypeService, IConfiguration configuration)
+        public ComponentTypesController(IComponentTypeService componentTypeService, IConfiguration configuration, IMapper mapper)
         {
             _componentTypeService = componentTypeService;
             _configuration = configuration;
+            _mapper = mapper;
         }
 
-        // INDEX (Search + Paging)
         [HttpGet]
         public IActionResult Index(string? q = null, int page = 1)
         {
@@ -41,27 +43,16 @@ namespace CarConfigurator_WebApp.Controllers
                 .ThenBy(t => t.Name)
                 .ToList();
 
-            vm.Items = results.Select(t => new ComponentTypeListItemVM
-            {
-                Id = t.Id,
-                Name = t.Name,
-                MinSelect = t.MinSelect,
-                MaxSelect = t.MaxSelect,
-                DisplayOrder = t.DisplayOrder,
-                IsActive = t.IsActive
-            }).ToList();
-
+            vm.Items = _mapper.Map<List<ComponentTypeListItemVM>>(results);
             return View(vm);
         }
 
-        // CREATE (GET)
         [HttpGet]
         public IActionResult Create()
         {
             return View(new ComponentTypeCreateVM { IsActive = true });
         }
 
-        // CREATE (POST)
         [HttpPost]
         [ValidateAntiForgeryToken]
         public IActionResult Create(ComponentTypeCreateVM vm)
@@ -77,16 +68,11 @@ namespace CarConfigurator_WebApp.Controllers
 
             try
             {
-                var entity = new ComponentType
-                {
-                    Name = vm.Name.Trim(),
-                    MinSelect = vm.MinSelect,
-                    MaxSelect = vm.MaxSelect,
-                    DisplayOrder = vm.DisplayOrder,
-                    IsActive = vm.IsActive
-                };
+                vm.Name = vm.Name.Trim();
 
+                var entity = _mapper.Map<ComponentType>(vm);
                 _componentTypeService.Add(entity);
+
                 return RedirectToAction(nameof(Index));
             }
             catch (InvalidOperationException ex)
@@ -101,28 +87,16 @@ namespace CarConfigurator_WebApp.Controllers
             }
         }
 
-        // EDIT (GET)
         [HttpGet]
         public IActionResult Edit(int id)
         {
             var entity = _componentTypeService.GetById(id);
-            if (entity == null)
-                return NotFound();
+            if (entity == null) return NotFound();
 
-            var vm = new ComponentTypeEditVM
-            {
-                Id = entity.Id,
-                Name = entity.Name,
-                MinSelect = entity.MinSelect,
-                MaxSelect = entity.MaxSelect,
-                DisplayOrder = entity.DisplayOrder,
-                IsActive = entity.IsActive
-            };
-
+            var vm = _mapper.Map<ComponentTypeEditVM>(entity);
             return View(vm);
         }
 
-        // EDIT (POST)
         [HttpPost]
         [ValidateAntiForgeryToken]
         public IActionResult Edit(ComponentTypeEditVM vm)
@@ -139,16 +113,13 @@ namespace CarConfigurator_WebApp.Controllers
             try
             {
                 var existing = _componentTypeService.GetById(vm.Id);
-                if (existing == null)
-                    return NotFound();
+                if (existing == null) return NotFound();
 
-                existing.Name = vm.Name.Trim();
-                existing.MinSelect = vm.MinSelect;
-                existing.MaxSelect = vm.MaxSelect;
-                existing.DisplayOrder = vm.DisplayOrder;
-                existing.IsActive = vm.IsActive;
+                vm.Name = vm.Name.Trim();
 
+                _mapper.Map(vm, existing);
                 _componentTypeService.Update(existing);
+
                 return RedirectToAction(nameof(Index));
             }
             catch (InvalidOperationException ex)
@@ -163,28 +134,16 @@ namespace CarConfigurator_WebApp.Controllers
             }
         }
 
-        // DELETE (GET)
         [HttpGet]
         public IActionResult Delete(int id)
         {
             var entity = _componentTypeService.GetById(id);
-            if (entity == null)
-                return NotFound();
+            if (entity == null) return NotFound();
 
-            var vm = new ComponentTypeDeleteVM
-            {
-                Id = entity.Id,
-                Name = entity.Name,
-                MinSelect = entity.MinSelect,
-                MaxSelect = entity.MaxSelect,
-                DisplayOrder = entity.DisplayOrder,
-                IsActive = entity.IsActive
-            };
-
+            var vm = _mapper.Map<ComponentTypeDeleteVM>(entity);
             return View(vm);
         }
 
-        // DELETE (POST)
         [HttpPost]
         [ValidateAntiForgeryToken]
         [ActionName("Delete")]

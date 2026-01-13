@@ -1,4 +1,5 @@
-﻿using CarConfigurator_WebApp.ViewModels;
+﻿using AutoMapper;
+using CarConfigurator_WebApp.ViewModels;
 using DAL.Services.Components;
 using DAL.Services.ComponentTypes;
 using Microsoft.AspNetCore.Authorization;
@@ -13,20 +14,22 @@ namespace CarConfigurator_WebApp.Controllers
         private readonly IComponentService _componentService;
         private readonly IComponentTypeService _componentTypeService;
         private readonly IConfiguration _configuration;
+        private readonly IMapper _mapper;
 
         private const int PageSize = 10;
 
         public ItemsController(
             IComponentService componentService,
             IComponentTypeService componentTypeService,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IMapper mapper)
         {
             _componentService = componentService;
             _componentTypeService = componentTypeService;
             _configuration = configuration;
+            _mapper = mapper;
         }
 
-        // INDEX 
         [HttpGet]
         public IActionResult Index(string? query, int? componentTypeId, int page = 1)
         {
@@ -34,7 +37,6 @@ namespace CarConfigurator_WebApp.Controllers
             return View(vm);
         }
 
-        // AJAX PARTIAL (list + paging)
         [HttpGet]
         public IActionResult ListPartial(string? query, int? componentTypeId, int page = 1)
         {
@@ -42,7 +44,6 @@ namespace CarConfigurator_WebApp.Controllers
             return PartialView("_ItemsTablePartial", vm);
         }
 
-        // DETAILS
         [HttpGet]
         public IActionResult Details(int id)
         {
@@ -50,23 +51,15 @@ namespace CarConfigurator_WebApp.Controllers
             if (component == null || !component.IsActive)
                 return NotFound();
 
-            // lookup type name (sigurno)
             var types = _componentTypeService.GetForConfigurator().ToList();
             var typeLookup = types.ToDictionary(t => t.Id, t => t.Name);
 
-            var vm = new ItemDetailsVM
-            {
-                Id = component.Id,
-                Title = component.Title,
-                Description = component.Description,
-                Price = component.Price,
-                ComponentTypeName = typeLookup.TryGetValue(component.ComponentTypeId, out var tName) ? tName : ""
-            };
+            var vm = _mapper.Map<ItemDetailsVM>(component);
+            vm.ComponentTypeName = typeLookup.TryGetValue(component.ComponentTypeId, out var tName) ? tName : "";
 
             return View(vm);
         }
 
-        // helper: build VM with correct counts
         private ItemsIndexVM BuildItemsVm(string? query, int? componentTypeId, int page)
         {
             if (page < 1) page = 1;
@@ -95,7 +88,6 @@ namespace CarConfigurator_WebApp.Controllers
                     .ToList()
             };
 
-            // Ako postoji filter po tipu, count/paging na filtriranom skupu (da count bude točan)
             if (componentTypeId.HasValue)
             {
                 var items = _componentService.GetByComponentType(componentTypeId.Value)
@@ -120,19 +112,16 @@ namespace CarConfigurator_WebApp.Controllers
                     .Take(vm.PageSize)
                     .ToList();
 
-                vm.Items = pageItems.Select(c => new ItemsListItemVM
+                vm.Items = _mapper.Map<List<ItemsListItemVM>>(pageItems);
+                foreach (var item in vm.Items)
                 {
-                    Id = c.Id,
-                    Title = c.Title,
-                    Description = c.Description,
-                    Price = c.Price,
-                    ComponentTypeName = typeLookup.TryGetValue(c.ComponentTypeId, out var tName) ? tName : ""
-                }).ToList();
+                    var src = pageItems.First(x => x.Id == item.Id);
+                    item.ComponentTypeName = typeLookup.TryGetValue(src.ComponentTypeId, out var tName) ? tName : "";
+                }
 
                 return vm;
             }
 
-            // Bez filtera po tipu: Search/Count iz servisa
             vm.TotalCount = _componentService.Count(query, onlyActive: true);
 
             var results = _componentService.Search(query, vm.Page, vm.PageSize, onlyActive: true)
@@ -140,14 +129,12 @@ namespace CarConfigurator_WebApp.Controllers
                 .ThenBy(c => c.Title)
                 .ToList();
 
-            vm.Items = results.Select(c => new ItemsListItemVM
+            vm.Items = _mapper.Map<List<ItemsListItemVM>>(results);
+            foreach (var item in vm.Items)
             {
-                Id = c.Id,
-                Title = c.Title,
-                Description = c.Description,
-                Price = c.Price,
-                ComponentTypeName = typeLookup.TryGetValue(c.ComponentTypeId, out var tName) ? tName : ""
-            }).ToList();
+                var src = results.First(x => x.Id == item.Id);
+                item.ComponentTypeName = typeLookup.TryGetValue(src.ComponentTypeId, out var tName) ? tName : "";
+            }
 
             return vm;
         }

@@ -1,4 +1,5 @@
-﻿using CarConfigurator_WebApp.ViewModels;
+﻿using AutoMapper;
+using CarConfigurator_WebApp.ViewModels;
 using DAL.Models;
 using DAL.Services.Components;
 using DAL.Services.ComponentTypes;
@@ -14,18 +15,20 @@ namespace CarConfigurator_WebApp.Controllers
         private readonly IComponentService _componentService;
         private readonly IComponentTypeService _componentTypeService;
         private readonly IConfiguration _configuration;
+        private readonly IMapper _mapper;
 
         public ComponentsController(
             IComponentService componentService,
             IComponentTypeService componentTypeService,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IMapper mapper)
         {
             _componentService = componentService;
             _componentTypeService = componentTypeService;
             _configuration = configuration;
+            _mapper = mapper;
         }
 
-        // INDEX (List + Search + Filter + Paging)
         [HttpGet]
         public IActionResult Index(string? q = null, int? componentTypeId = null, int page = 1)
         {
@@ -56,7 +59,7 @@ namespace CarConfigurator_WebApp.Controllers
                     .ToList()
             };
 
-            // filter po tipu komponenti
+            // Filter by type (MVC paging/count)
             if (componentTypeId.HasValue)
             {
                 var items = _componentService.GetByComponentType(componentTypeId.Value);
@@ -67,8 +70,7 @@ namespace CarConfigurator_WebApp.Controllers
                     items = items.Where(c =>
                         (!string.IsNullOrEmpty(c.Title) && c.Title.Contains(query, StringComparison.OrdinalIgnoreCase)) ||
                         (!string.IsNullOrEmpty(c.Name) && c.Name.Contains(query, StringComparison.OrdinalIgnoreCase)) ||
-                        (!string.IsNullOrEmpty(c.Description) && c.Description.Contains(query, StringComparison.OrdinalIgnoreCase))
-                    );
+                        (!string.IsNullOrEmpty(c.Description) && c.Description.Contains(query, StringComparison.OrdinalIgnoreCase)));
                 }
 
                 var filtered = items.ToList();
@@ -81,46 +83,38 @@ namespace CarConfigurator_WebApp.Controllers
                     .Take(vm.PageSize)
                     .ToList();
 
-                vm.Items = pageItems.Select(c => new ComponentListItemVM
+                vm.Items = _mapper.Map<List<ComponentListItemVM>>(pageItems);
+
+                foreach (var item in vm.Items)
                 {
-                    Id = c.Id,
-                    Name = c.Name,
-                    Title = c.Title,
-                    Price = c.Price,
-                    IsActive = c.IsActive,
-                    ComponentTypeName = typeLookup.TryGetValue(c.ComponentTypeId, out var typeName)
-                        ? typeName
-                        : "(n/a)"
-                }).ToList();
+                    // fill ignored field
+                    // find mapped source id in pageItems via Id match
+                    var src = pageItems.First(x => x.Id == item.Id);
+                    item.ComponentTypeName = typeLookup.TryGetValue(src.ComponentTypeId, out var typeName) ? typeName : "(n/a)";
+                }
 
                 return View(vm);
             }
 
-            // search + paging bez filtera po tipu
+            // Search + paging from DAL
             vm.TotalCount = _componentService.Count(q, onlyActive: false);
 
-            var results = _componentService
-                .Search(q, vm.Page, vm.PageSize, onlyActive: false)
+            var results = _componentService.Search(q, vm.Page, vm.PageSize, onlyActive: false)
                 .OrderBy(c => c.SortOrder ?? int.MaxValue)
                 .ThenBy(c => c.Title)
                 .ToList();
 
-            vm.Items = results.Select(c => new ComponentListItemVM
+            vm.Items = _mapper.Map<List<ComponentListItemVM>>(results);
+
+            foreach (var item in vm.Items)
             {
-                Id = c.Id,
-                Name = c.Name,
-                Title = c.Title,
-                Price = c.Price,
-                IsActive = c.IsActive,
-                ComponentTypeName = typeLookup.TryGetValue(c.ComponentTypeId, out var typeName)
-                    ? typeName
-                    : "(n/a)"
-            }).ToList();
+                var src = results.First(x => x.Id == item.Id);
+                item.ComponentTypeName = typeLookup.TryGetValue(src.ComponentTypeId, out var typeName) ? typeName : "(n/a)";
+            }
 
             return View(vm);
         }
 
-        // CREATE (GET)
         [HttpGet]
         public IActionResult Create()
         {
@@ -132,18 +126,13 @@ namespace CarConfigurator_WebApp.Controllers
                 ComponentTypes = types
                     .OrderBy(t => t.DisplayOrder ?? int.MaxValue)
                     .ThenBy(t => t.Name)
-                    .Select(t => new SelectListItem
-                    {
-                        Value = t.Id.ToString(),
-                        Text = t.Name
-                    })
+                    .Select(t => new SelectListItem { Value = t.Id.ToString(), Text = t.Name })
                     .ToList()
             };
 
             return View(vm);
         }
 
-        // CREATE (POST)
         [HttpPost]
         [ValidateAntiForgeryToken]
         public IActionResult Create(ComponentCreateVM vm)
@@ -157,26 +146,20 @@ namespace CarConfigurator_WebApp.Controllers
                     Value = t.Id.ToString(),
                     Text = t.Name,
                     Selected = t.Id == vm.ComponentTypeId
-                })
-                .ToList();
+                }).ToList();
 
             if (!ModelState.IsValid)
                 return View(vm);
 
             try
             {
-                var entity = new Component
-                {
-                    Name = vm.Name.Trim(),
-                    Title = vm.Title.Trim(),
-                    Description = string.IsNullOrWhiteSpace(vm.Description) ? null : vm.Description.Trim(),
-                    Price = vm.Price,
-                    IsActive = vm.IsActive,
-                    SortOrder = vm.SortOrder,
-                    ComponentTypeId = vm.ComponentTypeId,
-                    ImageId = vm.ImageId,
-                    CreatedAt = DateTime.UtcNow
-                };
+                // sanitize
+                vm.Name = vm.Name.Trim();
+                vm.Title = vm.Title.Trim();
+                vm.Description = string.IsNullOrWhiteSpace(vm.Description) ? null : vm.Description.Trim();
+
+                var entity = _mapper.Map<Component>(vm);
+                entity.CreatedAt = DateTime.UtcNow;
 
                 _componentService.Create(entity);
                 return RedirectToAction(nameof(Index));
@@ -193,7 +176,6 @@ namespace CarConfigurator_WebApp.Controllers
             }
         }
 
-        // EDIT (GET)
         [HttpGet]
         public IActionResult Edit(int id)
         {
@@ -203,33 +185,20 @@ namespace CarConfigurator_WebApp.Controllers
 
             var types = _componentTypeService.GetAll().ToList();
 
-            var vm = new ComponentEditVM
-            {
-                Id = entity.Id,
-                Name = entity.Name,
-                Title = entity.Title,
-                Description = entity.Description,
-                Price = entity.Price,
-                IsActive = entity.IsActive,
-                SortOrder = entity.SortOrder,
-                ComponentTypeId = entity.ComponentTypeId,
-                ImageId = entity.ImageId,
-                ComponentTypes = types
-                    .OrderBy(t => t.DisplayOrder ?? int.MaxValue)
-                    .ThenBy(t => t.Name)
-                    .Select(t => new SelectListItem
-                    {
-                        Value = t.Id.ToString(),
-                        Text = t.Name,
-                        Selected = t.Id == entity.ComponentTypeId
-                    })
-                    .ToList()
-            };
+            var vm = _mapper.Map<ComponentEditVM>(entity);
+            vm.ComponentTypes = types
+                .OrderBy(t => t.DisplayOrder ?? int.MaxValue)
+                .ThenBy(t => t.Name)
+                .Select(t => new SelectListItem
+                {
+                    Value = t.Id.ToString(),
+                    Text = t.Name,
+                    Selected = t.Id == entity.ComponentTypeId
+                }).ToList();
 
             return View(vm);
         }
 
-        // EDIT (POST)
         [HttpPost]
         [ValidateAntiForgeryToken]
         public IActionResult Edit(ComponentEditVM vm)
@@ -243,8 +212,7 @@ namespace CarConfigurator_WebApp.Controllers
                     Value = t.Id.ToString(),
                     Text = t.Name,
                     Selected = t.Id == vm.ComponentTypeId
-                })
-                .ToList();
+                }).ToList();
 
             if (!ModelState.IsValid)
                 return View(vm);
@@ -255,17 +223,14 @@ namespace CarConfigurator_WebApp.Controllers
                 if (existing == null)
                     return NotFound();
 
-                existing.Name = vm.Name.Trim();
-                existing.Title = vm.Title.Trim();
-                existing.Description = string.IsNullOrWhiteSpace(vm.Description) ? null : vm.Description.Trim();
-                existing.Price = vm.Price;
-                existing.IsActive = vm.IsActive;
-                existing.SortOrder = vm.SortOrder;
-                existing.ComponentTypeId = vm.ComponentTypeId;
-                existing.ImageId = vm.ImageId;
+                // sanitize
+                vm.Name = vm.Name.Trim();
+                vm.Title = vm.Title.Trim();
+                vm.Description = string.IsNullOrWhiteSpace(vm.Description) ? null : vm.Description.Trim();
+
+                _mapper.Map(vm, existing);
 
                 _componentService.Update(existing);
-
                 return RedirectToAction(nameof(Index));
             }
             catch (InvalidOperationException ex)
@@ -280,7 +245,6 @@ namespace CarConfigurator_WebApp.Controllers
             }
         }
 
-        // DELETE (GET)
         [HttpGet]
         public IActionResult Delete(int id)
         {
@@ -290,20 +254,12 @@ namespace CarConfigurator_WebApp.Controllers
 
             var type = _componentTypeService.GetById(entity.ComponentTypeId);
 
-            var vm = new ComponentDeleteVM
-            {
-                Id = entity.Id,
-                Name = entity.Name,
-                Title = entity.Title,
-                Price = entity.Price,
-                IsActive = entity.IsActive,
-                ComponentTypeName = type?.Name ?? "(n/a)"
-            };
+            var vm = _mapper.Map<ComponentDeleteVM>(entity);
+            vm.ComponentTypeName = type?.Name ?? "(n/a)";
 
             return View(vm);
         }
 
-        // DELETE (POST)
         [HttpPost]
         [ValidateAntiForgeryToken]
         [ActionName("Delete")]
