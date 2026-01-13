@@ -1,8 +1,9 @@
-﻿using CarConfigurator_WebApp.ViewModels;
+﻿using AutoMapper;
+using CarConfigurator_WebApp.ViewModels;
 using DAL.Services.Users;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
 namespace CarConfigurator_WebApp.Controllers
@@ -10,10 +11,12 @@ namespace CarConfigurator_WebApp.Controllers
     public class UserController : Controller
     {
         private readonly IUserService _userService;
+        private readonly IMapper _mapper;
 
-        public UserController(IUserService userService)
+        public UserController(IUserService userService, IMapper mapper)
         {
             _userService = userService;
+            _mapper = mapper;
         }
 
         [HttpGet]
@@ -49,11 +52,15 @@ namespace CarConfigurator_WebApp.Controllers
 
                 HttpContext.SignInAsync(principal).GetAwaiter().GetResult();
 
+                // Redirect nakon login-a
                 if (!string.IsNullOrWhiteSpace(vm.ReturnUrl) && Url.IsLocalUrl(vm.ReturnUrl))
                     return Redirect(vm.ReturnUrl);
 
-                // Za sada Home, kasnije će Admina slati na Components/Index
-                return RedirectToAction("Index", "Home");
+                // Role-based redirect
+                if (string.Equals(user.Role, "Admin", StringComparison.OrdinalIgnoreCase))
+                    return RedirectToAction("Index", "Components");
+
+                return RedirectToAction("Index", "Items");
             }
             catch (InvalidOperationException ex)
             {
@@ -81,28 +88,16 @@ namespace CarConfigurator_WebApp.Controllers
             return View();
         }
 
-        // Admin profil
         [Authorize(Roles = "Admin")]
         [HttpGet]
         public IActionResult Profile()
         {
-            var idClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrWhiteSpace(idClaim) || !int.TryParse(idClaim, out var userId))
-                return Forbid();
+            var userId = GetUserIdOrThrow();
 
             var user = _userService.GetUser(userId);
             if (user == null) return NotFound();
 
-            var vm = new AdminProfileVM
-            {
-                Id = user.Id,
-                UserName = user.UserName,
-                Email = user.Email,
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                Phone = user.Phone
-            };
-
+            var vm = _mapper.Map<AdminProfileVM>(user);
             return View(vm);
         }
 
@@ -123,13 +118,10 @@ namespace CarConfigurator_WebApp.Controllers
                 return BadRequest(new { message = "Validation error.", errors });
             }
 
-            var idClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrWhiteSpace(idClaim) || !int.TryParse(idClaim, out var userId))
-                return Forbid();
+            var userId = GetUserIdOrThrow();
 
-            // sigurnost: admin može mijenjati samo svoj profil na ovoj stranici
-            if (vm.Id != userId)
-                return Forbid();
+            // Admin na ovoj stranici mijenja samo svoj profil
+            if (vm.Id != userId) return Forbid();
 
             try
             {
@@ -141,7 +133,6 @@ namespace CarConfigurator_WebApp.Controllers
                 user.LastName = string.IsNullOrWhiteSpace(vm.LastName) ? null : vm.LastName.Trim();
                 user.Phone = string.IsNullOrWhiteSpace(vm.Phone) ? null : vm.Phone.Trim();
 
-                // Username se ovdje ne mijenja (ali ga moraš imati u user objektu zbog UpdateUser validacija)
                 _userService.UpdateUser(user);
 
                 return Ok(new { message = "Profile updated successfully." });
@@ -156,32 +147,18 @@ namespace CarConfigurator_WebApp.Controllers
             }
         }
 
-
-        //Dio za korisnički profil (svi korisnici)
         [Authorize]
         [HttpGet]
         public IActionResult UserProfile()
         {
-            var idClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrWhiteSpace(idClaim) || !int.TryParse(idClaim, out var userId))
-                return Forbid();
+            var userId = GetUserIdOrThrow();
 
             var user = _userService.GetUser(userId);
             if (user == null) return NotFound();
 
-            var vm = new AdminProfileVM
-            {
-                Id = user.Id,
-                UserName = user.UserName,
-                Email = user.Email,
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                Phone = user.Phone
-            };
-
+            var vm = _mapper.Map<AdminProfileVM>(user);
             return View(vm);
         }
-
 
         [Authorize]
         [HttpPost]
@@ -200,13 +177,10 @@ namespace CarConfigurator_WebApp.Controllers
                 return BadRequest(new { message = "Validation error.", errors });
             }
 
-            var idClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrWhiteSpace(idClaim) || !int.TryParse(idClaim, out var userId))
-                return Forbid();
+            var userId = GetUserIdOrThrow();
 
             // User može mijenjati samo svoj profil
-            if (vm.Id != userId)
-                return Forbid();
+            if (vm.Id != userId) return Forbid();
 
             try
             {
@@ -232,6 +206,12 @@ namespace CarConfigurator_WebApp.Controllers
             }
         }
 
-
+        private int GetUserIdOrThrow()
+        {
+            var idClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(idClaim) || !int.TryParse(idClaim, out var userId))
+                throw new InvalidOperationException("User not authenticated properly.");
+            return userId;
+        }
     }
 }

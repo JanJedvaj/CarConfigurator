@@ -1,6 +1,8 @@
-﻿using CarConfigurator_WebApp.ViewModels;
+﻿using AutoMapper;
+using CarConfigurator_WebApp.ViewModels;
 using DAL.Services.Configurations;
 using DAL.Services.Components;
+using DAL.Services.ComponentTypes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -12,32 +14,34 @@ namespace CarConfigurator_WebApp.Controllers
     public class ConfigurationsController : Controller
     {
         private readonly IConfigurationService _configurationService;
+        private readonly IComponentTypeService _componentTypeService;
         private readonly IComponentService _componentService;
+        private readonly IMapper _mapper;
 
         public ConfigurationsController(
             IConfigurationService configurationService,
-            IComponentService componentService)
+            IComponentService componentService,
+            IMapper mapper,
+            IComponentTypeService componentTypeService)
         {
             _configurationService = configurationService;
             _componentService = componentService;
+            _mapper = mapper;
+            _componentTypeService = componentTypeService;
         }
 
-        // MY (view + choose configuration)
         [HttpGet]
         public IActionResult My(int? configurationId = null)
         {
             var userId = GetUserIdOrThrow();
 
             var configs = _configurationService.GetUserConfigurations(userId).ToList();
-
-            // ako user nema nijednu - napravi jednu automatski
             if (configs.Count == 0)
             {
                 var newId = _configurationService.CreateConfiguration(userId, "My Configuration");
                 return RedirectToAction(nameof(My), new { configurationId = newId });
             }
 
-            // odaberi config: ako je poslan parametar koristi njega, inače uzmi najnoviji
             var selected = configurationId.HasValue
                 ? configs.FirstOrDefault(c => c.Id == configurationId.Value)
                 : configs.OrderByDescending(c => c.UpdatedAt ?? c.CreatedAt).First();
@@ -49,7 +53,6 @@ namespace CarConfigurator_WebApp.Controllers
                           ?? _configurationService.GetConfiguration(selected.Id)
                           ?? selected;
 
-            // dropdown lista konfiguracija
             var dropdown = configs
                 .OrderByDescending(c => c.UpdatedAt ?? c.CreatedAt)
                 .Select(c => new SelectListItem
@@ -57,8 +60,7 @@ namespace CarConfigurator_WebApp.Controllers
                     Value = c.Id.ToString(),
                     Text = c.Name,
                     Selected = c.Id == selected!.Id
-                })
-                .ToList();
+                }).ToList();
 
             var vm = new MyConfigurationVM
             {
@@ -69,7 +71,10 @@ namespace CarConfigurator_WebApp.Controllers
                 TotalPrice = details.TotalPrice ?? _configurationService.RecalculateTotalPrice(details.Id)
             };
 
-            // popuni items 
+            var typeLookup = _componentTypeService
+                .GetAll()
+                .ToDictionary(t => t.Id, t => t.Name);
+
             if (details.CarConfigurationComponents != null)
             {
                 foreach (var cc in details.CarConfigurationComponents)
@@ -77,13 +82,13 @@ namespace CarConfigurator_WebApp.Controllers
                     var comp = cc.Component ?? _componentService.GetById(cc.ComponentId);
                     if (comp == null) continue;
 
-                    vm.Items.Add(new ConfigurationComponentItemVM
-                    {
-                        ComponentId = comp.Id,
-                        Title = comp.Title,
-                        ComponentTypeName = comp.ComponentType?.Name ?? string.Empty,
-                        Price = comp.Price
-                    });
+                    var item = _mapper.Map<ConfigurationComponentItemVM>(comp);
+
+                    item.ComponentTypeName = typeLookup.TryGetValue(comp.ComponentTypeId, out var typeName)
+                        ? typeName
+                        : "";
+
+                    vm.Items.Add(item);
                 }
 
                 vm.Items = vm.Items
@@ -95,20 +100,16 @@ namespace CarConfigurator_WebApp.Controllers
             return View(vm);
         }
 
-        // CREATE NEW CONFIGURATION (user)
         [HttpPost]
         [ValidateAntiForgeryToken]
         public IActionResult CreateNew(string? name)
         {
             var userId = GetUserIdOrThrow();
-
             var finalName = string.IsNullOrWhiteSpace(name) ? "My Configuration" : name.Trim();
-
             var id = _configurationService.CreateConfiguration(userId, finalName);
             return RedirectToAction(nameof(My), new { configurationId = id });
         }
 
-        // ADD COMPONENT
         [HttpPost]
         [ValidateAntiForgeryToken]
         public IActionResult AddComponent(int componentId, int? configurationId = null)
@@ -123,17 +124,9 @@ namespace CarConfigurator_WebApp.Controllers
 
             int targetConfigId;
             if (configurationId.HasValue && configs.Any(c => c.Id == configurationId.Value))
-            {
                 targetConfigId = configurationId.Value;
-            }
-            else if (configs.Count == 0)
-            {
-                targetConfigId = _configurationService.CreateConfiguration(userId, "My Configuration");
-            }
             else
-            {
                 targetConfigId = configs.OrderByDescending(c => c.UpdatedAt ?? c.CreatedAt).First().Id;
-            }
 
             try
             {
@@ -147,7 +140,6 @@ namespace CarConfigurator_WebApp.Controllers
             }
         }
 
-        // REMOVE COMPONENT
         [HttpPost]
         [ValidateAntiForgeryToken]
         public IActionResult RemoveComponent(int configurationId, int componentId)
@@ -162,7 +154,6 @@ namespace CarConfigurator_WebApp.Controllers
             return RedirectToAction(nameof(My), new { configurationId });
         }
 
-        // CLEAR
         [HttpPost]
         [ValidateAntiForgeryToken]
         public IActionResult Clear(int configurationId)
