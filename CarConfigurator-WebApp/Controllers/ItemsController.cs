@@ -2,6 +2,7 @@
 using CarConfigurator_WebApp.ViewModels;
 using DAL.Services.Components;
 using DAL.Services.ComponentTypes;
+using DAL.Services.Images;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -13,6 +14,7 @@ namespace CarConfigurator_WebApp.Controllers
     {
         private readonly IComponentService _componentService;
         private readonly IComponentTypeService _componentTypeService;
+        private readonly IImageService _imageService;
         private readonly IConfiguration _configuration;
         private readonly IMapper _mapper;
 
@@ -21,11 +23,13 @@ namespace CarConfigurator_WebApp.Controllers
         public ItemsController(
             IComponentService componentService,
             IComponentTypeService componentTypeService,
+            IImageService imageService,
             IConfiguration configuration,
             IMapper mapper)
         {
             _componentService = componentService;
             _componentTypeService = componentTypeService;
+            _imageService = imageService;
             _configuration = configuration;
             _mapper = mapper;
         }
@@ -56,6 +60,12 @@ namespace CarConfigurator_WebApp.Controllers
 
             var vm = _mapper.Map<ItemDetailsVM>(component);
             vm.ComponentTypeName = typeLookup.TryGetValue(component.ComponentTypeId, out var tName) ? tName : "";
+
+            if (component.ImageId.HasValue)
+            {
+                var img = _imageService.GetById(component.ImageId.Value);
+                vm.ImageUrl = img?.StoragePathOrUrl;
+            }
 
             return View(vm);
         }
@@ -116,7 +126,7 @@ namespace CarConfigurator_WebApp.Controllers
                 foreach (var item in vm.Items)
                 {
                     var src = pageItems.First(x => x.Id == item.Id);
-                    item.ComponentTypeName = typeLookup.TryGetValue(src.ComponentTypeId, out var tName) ? tName : "";
+                    item.ComponentTypeName = typeLookup.TryGetValue(src.ComponentTypeId, out var typeName) ? typeName : "";
                 }
 
                 return vm;
@@ -133,7 +143,7 @@ namespace CarConfigurator_WebApp.Controllers
             foreach (var item in vm.Items)
             {
                 var src = results.First(x => x.Id == item.Id);
-                item.ComponentTypeName = typeLookup.TryGetValue(src.ComponentTypeId, out var tName) ? tName : "";
+                item.ComponentTypeName = typeLookup.TryGetValue(src.ComponentTypeId, out var typeName) ? typeName : "";
             }
 
             return vm;

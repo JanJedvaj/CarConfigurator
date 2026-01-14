@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc.Rendering;
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Http;
+
 
 namespace CarConfigurator_WebApp.ViewModels
 {
@@ -38,6 +40,12 @@ namespace CarConfigurator_WebApp.ViewModels
 
         [Display(Name = "Image")]
         public int? ImageId { get; set; }
+
+        [Display(Name = "Upload new image")]
+        public IFormFile? UploadImage { get; set; }
+
+        public string? CurrentImageUrl { get; set; }
+
 
         public List<SelectListItem> ComponentTypes { get; set; } = new();
     }

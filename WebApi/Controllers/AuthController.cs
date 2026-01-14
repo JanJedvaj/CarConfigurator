@@ -1,10 +1,10 @@
 ﻿using AutoMapper;
 using DAL.Models;
-using DAL.Security;
-using DAL.Services.Users;
+using DAL.Repositories.Users;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WebApi.DTOs.Auth;
+using WebApi.Security;
 
 namespace WebApi.Controllers
 {
@@ -13,19 +13,15 @@ namespace WebApi.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IConfiguration _configuration;
-        private readonly IUserService _service;
+        private readonly IUserRepository _userRepository;
         private readonly IMapper _mapper;
 
-        public AuthController(
-            IConfiguration configuration,
-            IUserService service,
-            IMapper mapper)
+        public AuthController(IConfiguration configuration, IUserRepository userRepository, IMapper mapper)
         {
             _configuration = configuration;
-            _service = service;
+            _userRepository = userRepository;
             _mapper = mapper;
         }
-
 
         [HttpPost("register")]
         public ActionResult<UserRegisterDto> Register([FromBody] UserRegisterDto dto)
@@ -36,22 +32,32 @@ namespace WebApi.Controllers
             try
             {
                 var username = dto.UserName.Trim();
+                var email = dto.Email.Trim();
 
-                if (_service.GetByUsername(username) != null)
+                if (_userRepository.ExistsUsername(username))
                     return BadRequest("Username already taken");
 
-    
+                if (_userRepository.ExistsEmail(email))
+                    return BadRequest("Email already taken");
+
                 var user = _mapper.Map<User>(dto);
 
                 user.UserName = username;
-                user.Email = dto.Email.Trim();
+                user.Email = email;
                 user.FirstName = dto.FirstName?.Trim();
                 user.LastName = dto.LastName?.Trim();
                 user.Phone = dto.Phone?.Trim();
                 user.Role = string.IsNullOrWhiteSpace(dto.Role) ? "User" : dto.Role.Trim();
                 user.IsActive = true;
+                user.CreatedAt = DateTime.UtcNow;
 
-                _service.Register(user, dto.Password);
+                var salt = PasswordHashProvider.GetSalt();
+                var hash = PasswordHashProvider.GetHash(dto.Password, salt);
+
+                user.PasswordSalt = salt;
+                user.PasswordHash = hash;
+
+                _userRepository.Add(user);
 
                 return Ok(dto);
             }
@@ -72,16 +78,25 @@ namespace WebApi.Controllers
                 var genericMessage = "Incorrect username or password";
                 var input = dto.UserNameOrEmail.Trim();
 
-                var user = _service.Login(input, dto.Password);
-                if (user == null)
+                var user = input.Contains("@")
+                    ? _userRepository.GetByEmail(input)
+                    : _userRepository.GetByUsername(input);
+
+                if (user == null || !user.IsActive)
                     return BadRequest(genericMessage);
 
+                var computedHash = PasswordHashProvider.GetHash(dto.Password, user.PasswordSalt);
+                if (!string.Equals(computedHash, user.PasswordHash, StringComparison.Ordinal))
+                    return BadRequest(genericMessage);
+
+                user.LastLoginAt = DateTime.UtcNow;
+                _userRepository.Update(user);
+
                 var secureKey = _configuration["Jwt:SecureKey"];
-                var expirationMinutes =
-                    int.Parse(_configuration["Jwt:ExpirationMinutes"] ?? "60");
+                var expirationMinutes = int.Parse(_configuration["Jwt:ExpirationMinutes"] ?? "60");
 
                 var token = JwtTokenProvider.CreateToken(
-                    secureKey,
+                    secureKey!,
                     expirationMinutes,
                     user.UserName,
                     user.Role
@@ -95,9 +110,6 @@ namespace WebApi.Controllers
             }
         }
 
-        // =========================
-        // CHANGE PASSWORD
-        // =========================
         [Authorize]
         [HttpPost("changepassword")]
         public ActionResult ChangePassword([FromBody] ChangePasswordDto dto)
@@ -107,11 +119,26 @@ namespace WebApi.Controllers
 
             try
             {
-                _service.ChangePassword(
-                    dto.UserName.Trim(),
-                    dto.OldPassword,
-                    dto.NewPassword
-                );
+                var username = dto.UserName.Trim();
+                var user = _userRepository.GetByUsername(username);
+
+                if (user == null)
+                    return BadRequest("User not found.");
+
+                var currentHash = PasswordHashProvider.GetHash(dto.OldPassword, user.PasswordSalt);
+                if (!string.Equals(currentHash, user.PasswordHash, StringComparison.Ordinal))
+                    return BadRequest("Old password is incorrect.");
+
+                if (dto.NewPassword.Length < 8)
+                    return BadRequest("New password should be at least 8 characters long.");
+
+                var newSalt = PasswordHashProvider.GetSalt();
+                var newHash = PasswordHashProvider.GetHash(dto.NewPassword, newSalt);
+
+                user.PasswordSalt = newSalt;
+                user.PasswordHash = newHash;
+
+                _userRepository.Update(user);
 
                 return Ok("Password changed successfully.");
             }

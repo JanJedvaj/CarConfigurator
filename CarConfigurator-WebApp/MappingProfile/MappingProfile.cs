@@ -23,13 +23,16 @@ namespace CarConfigurator_WebApp.MappingProfiles
                 .ForMember(d => d.CreatedAt, opt => opt.Ignore())
                 .ForMember(d => d.ComponentType, opt => opt.Ignore())
                 .ForMember(d => d.Image, opt => opt.Ignore())
-                .ForMember(d => d.CarConfigurationComponents, opt => opt.Ignore());
+                .ForMember(d => d.CarConfigurationComponents, opt => opt.Ignore())
+                .ForSourceMember(s => s.UploadImage, opt => opt.DoNotValidate());
 
             CreateMap<ComponentEditVM, Component>()
                 .ForMember(d => d.CreatedAt, opt => opt.Ignore())
                 .ForMember(d => d.ComponentType, opt => opt.Ignore())
+                .ForMember(d => d.CarConfigurationComponents, opt => opt.Ignore())
                 .ForMember(d => d.Image, opt => opt.Ignore())
-                .ForMember(d => d.CarConfigurationComponents, opt => opt.Ignore());
+                .ForSourceMember(s => s.UploadImage, opt => opt.DoNotValidate())
+                .ForSourceMember(s => s.CurrentImageUrl, opt => opt.DoNotValidate());
 
             //Za tip komponenti
             CreateMap<ComponentType, ComponentTypeListItemVM>();
