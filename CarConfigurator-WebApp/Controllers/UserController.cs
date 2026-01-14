@@ -1,136 +1,313 @@
-﻿using CarConfigurator_WebApp.ViewModels;
-using DAL.Services.ComponentTypes;
-using DAL.Services.Configurations;
+﻿using AutoMapper;
+using CarConfigurator_WebApp.Security;
+using CarConfigurator_WebApp.ViewModels;
+using DAL.Models;
+using DAL.Repositories.Users;
 using DAL.Services.Users;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace CarConfigurator_WebApp.Controllers
 {
-    [Authorize(Roles = "Admin")]
-    public class UsersController : Controller
+    public class UserController : Controller
     {
-        private readonly IUserService _userService;
-        private readonly IConfigurationService _configurationService;
-        private readonly IComponentTypeService _componentTypeService;
+        private readonly IUserRepository _userRepository;   // AUTH radi direktno preko repo
+        private readonly IUserService _userService;         
+        private readonly IMapper _mapper;
 
-        public UsersController(
-            IUserService userService,
-            IConfigurationService configurationService,
-            IComponentTypeService componentTypeService)
+        public UserController(IUserRepository userRepository, IUserService userService, IMapper mapper)
         {
+            _userRepository = userRepository;
             _userService = userService;
-            _configurationService = configurationService;
-            _componentTypeService = componentTypeService;
+            _mapper = mapper;
         }
 
-        // =========================
-        // LIST USERS
-        // =========================
         [HttpGet]
-        public IActionResult Index(string? q = null)
+        public IActionResult Login(string? returnUrl = null)
         {
-            var users = _userService.GetAllUsers();
+            if (User?.Identity?.IsAuthenticated == true)
+                return RedirectToAction("Index", "Home");
 
-            if (!string.IsNullOrWhiteSpace(q))
-            {
-                var query = q.Trim();
-                users = users.Where(u =>
-                    (!string.IsNullOrEmpty(u.UserName) && u.UserName.Contains(query, StringComparison.OrdinalIgnoreCase)) ||
-                    (!string.IsNullOrEmpty(u.Email) && u.Email.Contains(query, StringComparison.OrdinalIgnoreCase)));
-            }
-
-            var vm = new UsersIndexVM
-            {
-                Query = q,
-                Items = users
-                    .OrderBy(u => u.UserName)
-                    .Select(u => new UserListItemVM
-                    {
-                        Id = u.Id,
-                        UserName = u.UserName,
-                        Email = u.Email,
-                        Role = u.Role,
-                        IsActive = u.IsActive,
-                        CreatedAt = u.CreatedAt,
-                        LastLoginAt = u.LastLoginAt
-                    })
-                    .ToList()
-            };
-
-            return View(vm);
+            return View(new LoginViewModel { ReturnUrl = returnUrl });
         }
 
-        // =========================
-        // USER DETAILS + "actions"
-        // =========================
-        [HttpGet]
-        public IActionResult Details(int id)
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult Login(LoginViewModel vm)
         {
-            var user = _userService.GetUser(id);
-            if (user == null) return NotFound();
+            if (!ModelState.IsValid)
+                return View(vm);
 
-            // lookup tipova za prikaz ComponentTypeName (ne oslanjamo se na Include)
-            var typeLookup = _componentTypeService.GetAll()
-                .ToDictionary(t => t.Id, t => t.Name);
-
-            var configs = _configurationService.GetUserConfigurations(user.Id)
-                .OrderByDescending(c => c.UpdatedAt ?? c.CreatedAt)
-                .ToList();
-
-            var vm = new UserDetailsVM
+            try
             {
-                Id = user.Id,
-                UserName = user.UserName,
-                Email = user.Email,
-                Role = user.Role,
-                IsActive = user.IsActive,
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                Phone = user.Phone,
-                CreatedAt = user.CreatedAt,
-                LastLoginAt = user.LastLoginAt
-            };
+                var input = vm.UserNameOrEmail.Trim();
 
-            foreach (var c in configs)
-            {
-                var details = _configurationService.GetConfigurationDetails(c.Id) ?? c;
+                var user = input.Contains("@")
+                    ? _userRepository.GetByEmail(input)
+                    : _userRepository.GetByUsername(input);
 
-                var configVm = new UserConfigurationVM
+                if (user == null)
+                    throw new InvalidOperationException("Invalid credentials.");
+
+                if (!user.IsActive)
+                    throw new InvalidOperationException("User is not active.");
+
+                var computedHash = PasswordHashProvider.GetHash(vm.Password, user.PasswordSalt);
+                if (!string.Equals(computedHash, user.PasswordHash, StringComparison.Ordinal))
+                    throw new InvalidOperationException("Invalid credentials.");
+
+                user.LastLoginAt = DateTime.UtcNow;
+                _userRepository.Update(user);
+
+                var claims = new List<Claim>
                 {
-                    ConfigurationId = details.Id,
-                    Name = details.Name,
-                    CreatedAt = details.CreatedAt,
-                    UpdatedAt = details.UpdatedAt,
-                    TotalPrice = details.TotalPrice ?? _configurationService.RecalculateTotalPrice(details.Id)
+                    new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                    new Claim(ClaimTypes.Name, user.UserName),
+                    new Claim(ClaimTypes.Email, user.Email ?? string.Empty),
+                    new Claim(ClaimTypes.Role, user.Role ?? "User")
                 };
 
-                if (details.CarConfigurationComponents != null)
-                {
-                    foreach (var cc in details.CarConfigurationComponents)
-                    {
-                        var comp = cc.Component;
-                        if (comp == null) continue;
+                var identity = new ClaimsIdentity(claims, "Cookies");
+                var principal = new ClaimsPrincipal(identity);
 
-                        configVm.Components.Add(new UserConfigurationComponentVM
-                        {
-                            ComponentId = comp.Id,
-                            Title = comp.Title,
-                            ComponentTypeName = typeLookup.TryGetValue(comp.ComponentTypeId, out var typeName) ? typeName : "",
-                            Price = comp.Price
-                        });
-                    }
+                HttpContext.SignInAsync(principal).GetAwaiter().GetResult();
 
-                    configVm.Components = configVm.Components
-                        .OrderBy(x => x.ComponentTypeName)
-                        .ThenBy(x => x.Title)
-                        .ToList();
-                }
+                if (!string.IsNullOrWhiteSpace(vm.ReturnUrl) && Url.IsLocalUrl(vm.ReturnUrl))
+                    return Redirect(vm.ReturnUrl);
 
-                vm.Configurations.Add(configVm);
+                if (string.Equals(user.Role, "Admin", StringComparison.OrdinalIgnoreCase))
+                    return RedirectToAction("Index", "Components");
+
+                return RedirectToAction("Index", "Items");
             }
+            catch (InvalidOperationException ex)
+            {
+                ModelState.AddModelError(string.Empty, ex.Message);
+                return View(vm);
+            }
+            catch
+            {
+                ModelState.AddModelError(string.Empty, "Došlo je do pogreške prilikom prijave.");
+                return View(vm);
+            }
+        }
 
+        [HttpGet]
+        public IActionResult Register()
+        {
+            if (User?.Identity?.IsAuthenticated == true)
+                return RedirectToAction("Index", "Home");
+
+            return View(new RegisterVM());
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult Register(RegisterVM vm)
+        {
+            if (!ModelState.IsValid)
+                return View(vm);
+
+            try
+            {
+                var username = vm.UserName.Trim();
+                var email = vm.Email.Trim();
+
+                if (_userRepository.ExistsUsername(username))
+                    throw new InvalidOperationException("Username already exists.");
+
+                if (_userRepository.ExistsEmail(email))
+                    throw new InvalidOperationException("Email already exists.");
+
+                var salt = PasswordHashProvider.GetSalt();
+                var hash = PasswordHashProvider.GetHash(vm.Password, salt);
+
+                var user = new User
+                {
+                    UserName = username,
+                    Email = email,
+                    Role = "User",
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow,
+                    PasswordSalt = salt,
+                    PasswordHash = hash
+                };
+
+                _userRepository.Add(user);
+
+                TempData["Success"] = "Registration successful. Please log in.";
+                return RedirectToAction(nameof(Login));
+            }
+            catch (InvalidOperationException ex)
+            {
+                ModelState.AddModelError(string.Empty, ex.Message);
+                return View(vm);
+            }
+            catch
+            {
+                ModelState.AddModelError(string.Empty, "Došlo je do greške prilikom registracije.");
+                return View(vm);
+            }
+        }
+
+        [Authorize]
+        [HttpGet]
+        public IActionResult ChangePassword()
+        {
+            return View(new ChangePasswordVM());
+        }
+
+        [Authorize]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult ChangePassword(ChangePasswordVM vm)
+        {
+            if (!ModelState.IsValid)
+                return View(vm);
+
+            try
+            {
+                var username = User.Identity!.Name!;
+                var user = _userRepository.GetByUsername(username.Trim());
+
+                if (user == null)
+                    throw new InvalidOperationException("User not found.");
+
+                var currentHash = PasswordHashProvider.GetHash(vm.OldPassword, user.PasswordSalt);
+                if (!string.Equals(currentHash, user.PasswordHash, StringComparison.Ordinal))
+                    throw new InvalidOperationException("Old password is incorrect.");
+
+                var newSalt = PasswordHashProvider.GetSalt();
+                var newHash = PasswordHashProvider.GetHash(vm.NewPassword, newSalt);
+
+                user.PasswordSalt = newSalt;
+                user.PasswordHash = newHash;
+
+                _userRepository.Update(user);
+
+                TempData["Success"] = "Password changed successfully.";
+                return RedirectToAction("Index", "Home");
+            }
+            catch (InvalidOperationException ex)
+            {
+                ModelState.AddModelError(string.Empty, ex.Message);
+                return View(vm);
+            }
+            catch
+            {
+                ModelState.AddModelError(string.Empty, "Došlo je do greške prilikom promjene lozinke.");
+                return View(vm);
+            }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult Logout()
+        {
+            HttpContext.SignOutAsync().GetAwaiter().GetResult();
+            return RedirectToAction(nameof(Login));
+        }
+
+        [HttpGet]
+        public IActionResult Forbidden()
+        {
+            return View();
+        }
+
+        [Authorize(Roles = "Admin")]
+        [HttpGet]
+        public IActionResult Profile()
+        {
+            var userId = GetUserIdOrThrow();
+            var user = _userService.GetUser(userId);
+            if (user == null) return NotFound();
+
+            var vm = _mapper.Map<AdminProfileVM>(user);
             return View(vm);
+        }
+
+        [Authorize(Roles = "Admin")]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult UpdateProfile(AdminProfileVM vm)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(new { message = "Validation error." });
+
+            var userId = GetUserIdOrThrow();
+            if (vm.Id != userId) return Forbid();
+
+            try
+            {
+                var user = _userService.GetUser(userId);
+                if (user == null) return NotFound(new { message = "User not found." });
+
+                user.Email = vm.Email.Trim();
+                user.FirstName = string.IsNullOrWhiteSpace(vm.FirstName) ? null : vm.FirstName.Trim();
+                user.LastName = string.IsNullOrWhiteSpace(vm.LastName) ? null : vm.LastName.Trim();
+                user.Phone = string.IsNullOrWhiteSpace(vm.Phone) ? null : vm.Phone.Trim();
+
+                _userService.UpdateUser(user);
+
+                return Ok(new { message = "Profile updated successfully." });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [Authorize]
+        [HttpGet]
+        public IActionResult UserProfile()
+        {
+            var userId = GetUserIdOrThrow();
+            var user = _userService.GetUser(userId);
+            if (user == null) return NotFound();
+
+            var vm = _mapper.Map<AdminProfileVM>(user);
+            return View(vm);
+        }
+
+        [Authorize]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult UpdateUserProfile(AdminProfileVM vm)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(new { message = "Validation error." });
+
+            var userId = GetUserIdOrThrow();
+            if (vm.Id != userId) return Forbid();
+
+            try
+            {
+                var user = _userService.GetUser(userId);
+                if (user == null) return NotFound(new { message = "User not found." });
+
+                user.Email = vm.Email.Trim();
+                user.FirstName = string.IsNullOrWhiteSpace(vm.FirstName) ? null : vm.FirstName.Trim();
+                user.LastName = string.IsNullOrWhiteSpace(vm.LastName) ? null : vm.LastName.Trim();
+                user.Phone = string.IsNullOrWhiteSpace(vm.Phone) ? null : vm.Phone.Trim();
+
+                _userService.UpdateUser(user);
+
+                return Ok(new { message = "Profile updated successfully." });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        private int GetUserIdOrThrow()
+        {
+            var idClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(idClaim) || !int.TryParse(idClaim, out var userId))
+                throw new InvalidOperationException("User not authenticated properly.");
+            return userId;
         }
     }
 }

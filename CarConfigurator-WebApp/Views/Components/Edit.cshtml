@@ -6,7 +6,7 @@
 
 <h2>Edit Component</h2>
 
-<form asp-action="Edit" method="post">
+<form asp-action="Edit" method="post" enctype="multipart/form-data">
     @Html.AntiForgeryToken()
     <input type="hidden" asp-for="Id" />
 
@@ -72,6 +72,20 @@
         <button type="submit" class="btn btn-primary">Save</button>
         <a asp-action="Index" class="btn btn-outline-secondary">Back</a>
     </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.CurrentImageUrl))
+    {
+        <div class="mb-3">
+            <label class="form-label">Current image</label><br />
+            <img src="@Model.CurrentImageUrl" style="max-height:180px; border:1px solid #ddd; padding:4px;" />
+        </div>
+    }
+
+    <div class="mb-3">
+        <label asp-for="UploadImage" class="form-label"></label>
+        <input asp-for="UploadImage" type="file" class="form-control" />
+    </div>
+
 </form>
 
 @section Scripts {

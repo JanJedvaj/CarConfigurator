@@ -3,7 +3,7 @@ using DAL.Models;
 using DAL.Services.Images;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using WebApi.DTOs.Images;
+using System.ComponentModel.DataAnnotations;
 
 namespace WebApi.Controllers
 {
@@ -13,13 +13,16 @@ namespace WebApi.Controllers
     {
         private readonly IImageService _service;
         private readonly IMapper _mapper;
+        private readonly IWebHostEnvironment _env;
 
         public ImagesController(
             IImageService service,
-            IMapper mapper)
+            IMapper mapper,
+            IWebHostEnvironment env)
         {
             _service = service;
             _mapper = mapper;
+            _env = env;
         }
 
         [HttpGet("search")]
@@ -29,31 +32,62 @@ namespace WebApi.Controllers
             [FromQuery] int pageSize = 20)
         {
             var entities = _service.SearchByFileName(q, page, pageSize);
-            var items = entities.Select(x => _mapper.Map<ImageResponseDto>(x));
+            var items = entities.Select(x => _mapper.Map<WebApi.DTOs.Images.ImageResponseDto>(x));
             var total = _service.Count(q);
 
             return Ok(new { total, page, pageSize, items });
         }
 
+        public sealed class UploadImageForm
+        {
+            [Required]
+            public IFormFile File { get; set; } = default!;
+        }
+
         [Authorize(Roles = "Admin")]
         [HttpPost]
-        public ActionResult Create([FromBody] ImageCreateDto dto)
+        [Consumes("multipart/form-data")]
+        [RequestSizeLimit(20_000_000)] // 20 MB
+        public async Task<IActionResult> Upload([FromForm] UploadImageForm form)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
+            var file = form.File;
 
-            try
-            {
-                var entity = _mapper.Map<Image>(dto);
-                entity.UploadedAt = DateTime.UtcNow;
+            if (file == null || file.Length == 0)
+                return BadRequest("No file uploaded.");
 
-                var id = _service.Create(entity);
-                return Ok(new { id });
-            }
-            catch (Exception ex)
+            var allowed = new[] { "image/png", "image/jpeg", "image/webp" };
+            if (!allowed.Contains(file.ContentType))
+                return BadRequest("Only PNG, JPEG or WEBP allowed.");
+
+            var webRoot = _env.WebRootPath;
+            if (string.IsNullOrWhiteSpace(webRoot))
+                webRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+
+            var uploadsRoot = Path.Combine(webRoot, "uploads");
+            Directory.CreateDirectory(uploadsRoot);
+
+            var ext = Path.GetExtension(file.FileName);
+            var newName = $"{Guid.NewGuid():N}{ext}";
+            var physicalPath = Path.Combine(uploadsRoot, newName);
+
+            await using (var fs = System.IO.File.Create(physicalPath))
             {
-                return BadRequest(ex.Message);
+                await file.CopyToAsync(fs);
             }
+
+            var image = new Image
+            {
+                FileName = file.FileName,
+                ContentType = file.ContentType,
+                Length = file.Length,
+                StoragePathOrUrl = $"/uploads/{newName}",
+                UploadedAt = DateTime.UtcNow
+            };
+
+            var id = _service.Create(image);
+
+            var baseUrl = $"{Request.Scheme}://{Request.Host}";
+            return Ok(new { id, url = baseUrl + image.StoragePathOrUrl });
         }
 
         [Authorize(Roles = "Admin")]

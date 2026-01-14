@@ -6,7 +6,7 @@
 
 <h2>Create Component</h2>
 
-<form asp-action="Create" method="post">
+<form asp-action="Create" method="post" enctype="multipart/form-data">
     @Html.AntiForgeryToken()
 
     <div class="text-danger">
@@ -71,6 +71,12 @@
         <button type="submit" class="btn btn-primary">Create</button>
         <a asp-action="Index" class="btn btn-outline-secondary">Back</a>
     </div>
+
+    <div class="mb-3">
+        <label asp-for="UploadImage" class="form-label"></label>
+        <input asp-for="UploadImage" type="file" class="form-control" />
+    </div>
+
 </form>
 
 @section Scripts {

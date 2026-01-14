@@ -1,10 +1,9 @@
 ﻿using Microsoft.IdentityModel.Tokens;
-using System;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 
-namespace DAL.Security
+namespace CarConfigurator_WebApp.Security
 {
     public class JwtTokenProvider
     {
@@ -22,8 +21,7 @@ namespace DAL.Security
 
             if (!string.IsNullOrEmpty(subject))
             {
-                // Claims (Name + Sub + Role)
-                var claims = new System.Collections.Generic.List<Claim>
+                var claims = new List<Claim>
                 {
                     new Claim(ClaimTypes.Name, subject),
                     new Claim(JwtRegisteredClaimNames.Sub, subject)

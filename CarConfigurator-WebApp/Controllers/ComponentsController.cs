@@ -3,6 +3,7 @@ using CarConfigurator_WebApp.ViewModels;
 using DAL.Models;
 using DAL.Services.Components;
 using DAL.Services.ComponentTypes;
+using DAL.Services.Images;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -13,17 +14,20 @@ namespace CarConfigurator_WebApp.Controllers
     public class ComponentsController : Controller
     {
         private readonly IComponentService _componentService;
+        private readonly IImageService _imageService;
         private readonly IComponentTypeService _componentTypeService;
         private readonly IConfiguration _configuration;
         private readonly IMapper _mapper;
 
         public ComponentsController(
             IComponentService componentService,
+            IImageService imageService,
             IComponentTypeService componentTypeService,
             IConfiguration configuration,
             IMapper mapper)
         {
             _componentService = componentService;
+            _imageService = imageService;
             _componentTypeService = componentTypeService;
             _configuration = configuration;
             _mapper = mapper;
@@ -59,7 +63,6 @@ namespace CarConfigurator_WebApp.Controllers
                     .ToList()
             };
 
-            // Filter by type (MVC paging/count)
             if (componentTypeId.HasValue)
             {
                 var items = _componentService.GetByComponentType(componentTypeId.Value);
@@ -87,8 +90,6 @@ namespace CarConfigurator_WebApp.Controllers
 
                 foreach (var item in vm.Items)
                 {
-                    // fill ignored field
-                    // find mapped source id in pageItems via Id match
                     var src = pageItems.First(x => x.Id == item.Id);
                     item.ComponentTypeName = typeLookup.TryGetValue(src.ComponentTypeId, out var typeName) ? typeName : "(n/a)";
                 }
@@ -96,7 +97,6 @@ namespace CarConfigurator_WebApp.Controllers
                 return View(vm);
             }
 
-            // Search + paging from DAL
             vm.TotalCount = _componentService.Count(q, onlyActive: false);
 
             var results = _componentService.Search(q, vm.Page, vm.PageSize, onlyActive: false)
@@ -153,7 +153,6 @@ namespace CarConfigurator_WebApp.Controllers
 
             try
             {
-                // sanitize
                 vm.Name = vm.Name.Trim();
                 vm.Title = vm.Title.Trim();
                 vm.Description = string.IsNullOrWhiteSpace(vm.Description) ? null : vm.Description.Trim();
@@ -161,7 +160,17 @@ namespace CarConfigurator_WebApp.Controllers
                 var entity = _mapper.Map<Component>(vm);
                 entity.CreatedAt = DateTime.UtcNow;
 
+                // 1) kreiraj komponentu
                 _componentService.Create(entity);
+
+                // 2) ako ima upload, spremi sliku i poveži na komponentu
+                if (vm.UploadImage != null)
+                {
+                    var newImageId = SaveImageAndCreateRecord(vm.UploadImage);
+                    if (newImageId.HasValue)
+                        _componentService.SetImage(entity.Id, newImageId.Value);
+                }
+
                 return RedirectToAction(nameof(Index));
             }
             catch (InvalidOperationException ex)
@@ -196,6 +205,13 @@ namespace CarConfigurator_WebApp.Controllers
                     Selected = t.Id == entity.ComponentTypeId
                 }).ToList();
 
+            // prikaz postojeće slike
+            if (entity.ImageId.HasValue)
+            {
+                var img = _imageService.GetById(entity.ImageId.Value);
+                vm.CurrentImageUrl = img?.StoragePathOrUrl;
+            }
+
             return View(vm);
         }
 
@@ -223,7 +239,6 @@ namespace CarConfigurator_WebApp.Controllers
                 if (existing == null)
                     return NotFound();
 
-                // sanitize
                 vm.Name = vm.Name.Trim();
                 vm.Title = vm.Title.Trim();
                 vm.Description = string.IsNullOrWhiteSpace(vm.Description) ? null : vm.Description.Trim();
@@ -231,6 +246,14 @@ namespace CarConfigurator_WebApp.Controllers
                 _mapper.Map(vm, existing);
 
                 _componentService.Update(existing);
+
+                if (vm.UploadImage != null)
+                {
+                    var newImageId = SaveImageAndCreateRecord(vm.UploadImage);
+                    if (newImageId.HasValue)
+                        _componentService.SetImage(existing.Id, newImageId.Value);
+                }
+
                 return RedirectToAction(nameof(Index));
             }
             catch (InvalidOperationException ex)
@@ -280,6 +303,42 @@ namespace CarConfigurator_WebApp.Controllers
                 TempData["Error"] = "Došlo je do greške prilikom brisanja komponente.";
                 return RedirectToAction(nameof(Delete), new { id });
             }
+        }
+
+        private int? SaveImageAndCreateRecord(IFormFile file)
+        {
+            if (file == null || file.Length == 0) return null;
+
+            var allowed = new[] { "image/jpeg", "image/png", "image/webp" };
+            if (!allowed.Contains(file.ContentType))
+                throw new InvalidOperationException("Only JPG, PNG or WEBP images are allowed.");
+
+            // folder wwwroot/uploads
+            var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
+            Directory.CreateDirectory(uploadsDir);
+
+            var ext = Path.GetExtension(file.FileName);
+            var storedFileName = $"{Guid.NewGuid():N}{ext}";
+            var storedFullPath = Path.Combine(uploadsDir, storedFileName);
+
+            using (var stream = new FileStream(storedFullPath, FileMode.Create))
+            {
+                file.CopyTo(stream);
+            }
+
+            var url = $"/uploads/{storedFileName}";
+
+            var image = new DAL.Models.Image
+            {
+                FileName = Path.GetFileName(file.FileName),
+                ContentType = file.ContentType,
+                Length = file.Length,
+                StoragePathOrUrl = url,
+                UploadedAt = DateTime.UtcNow
+            };
+
+            var imageId = _imageService.Create(image);
+            return imageId;
         }
     }
 }
