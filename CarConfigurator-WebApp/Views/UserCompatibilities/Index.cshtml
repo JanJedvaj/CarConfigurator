@@ -1,0 +1,96 @@
+﻿@model CarConfigurator_WebApp.ViewModels.UserCompatibilitiesVM
+
+@{
+    ViewData["Title"] = "Compatibilities";
+}
+
+<h2>Compatibilities</h2>
+
+<form method="get" class="row g-2 align-items-end mb-4">
+    <div class="col-md-8">
+        <label class="form-label">Select component</label>
+        <select class="form-select" name="componentId" asp-items="Model.Components">
+            <option value="">(select)</option>
+        </select>
+    </div>
+    <div class="col-md-4">
+        <button class="btn btn-primary w-100" type="submit">Show</button>
+    </div>
+</form>
+
+@if (!Model.SelectedComponentId.HasValue)
+{
+    <div class="alert alert-info">
+        Select a component to see what it can be combined with.
+    </div>
+}
+else
+{
+    <div class="row g-3">
+        <div class="col-md-6">
+            <div class="card p-3">
+                <h5 class="mb-3">Allowed</h5>
+
+                @if (Model.Allowed.Count == 0)
+                {
+                    <div class="text-muted">No explicitly allowed components.</div>
+                }
+                else
+                {
+                    <table class="table table-sm table-striped">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Component</th>
+                                <th class="text-end">Price</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Model.Allowed)
+                            {
+                                <tr>
+                                    <td>@item.ComponentTypeName</td>
+                                    <td>@item.Title</td>
+                                    <td class="text-end">@item.Price.ToString("0.00")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card p-3">
+                <h5 class="mb-3">Blocked</h5>
+
+                @if (Model.Blocked.Count == 0)
+                {
+                    <div class="text-muted">No explicitly blocked components.</div>
+                }
+                else
+                {
+                    <table class="table table-sm table-striped">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Component</th>
+                                <th class="text-end">Price</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Model.Blocked)
+                            {
+                                <tr>
+                                    <td>@item.ComponentTypeName</td>
+                                    <td>@item.Title</td>
+                                    <td class="text-end">@item.Price.ToString("0.00")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    </div>
+}
