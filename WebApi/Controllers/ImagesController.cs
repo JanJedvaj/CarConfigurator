@@ -1,9 +1,11 @@
 ﻿using AutoMapper;
 using DAL.Models;
 using DAL.Services.Images;
+using DAL.Services.Logs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
+using WebApi.DTOs.Images;
 
 namespace WebApi.Controllers
 {
@@ -14,15 +16,18 @@ namespace WebApi.Controllers
         private readonly IImageService _service;
         private readonly IMapper _mapper;
         private readonly IWebHostEnvironment _env;
+        private readonly ILogService _logService;
 
         public ImagesController(
             IImageService service,
             IMapper mapper,
-            IWebHostEnvironment env)
+            IWebHostEnvironment env,
+            ILogService logService)
         {
             _service = service;
             _mapper = mapper;
             _env = env;
+            _logService = logService;
         }
 
         [HttpGet("search")]
@@ -31,11 +36,29 @@ namespace WebApi.Controllers
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20)
         {
-            var entities = _service.SearchByFileName(q, page, pageSize);
-            var items = entities.Select(x => _mapper.Map<WebApi.DTOs.Images.ImageResponseDto>(x));
-            var total = _service.Count(q);
+            try
+            {
+                var entities = _service.SearchByFileName(q, page, pageSize).ToList();
+                var items = entities.Select(x => _mapper.Map<ImageResponseDto>(x)).ToList();
+                var total = _service.Count(q);
 
-            return Ok(new { total, page, pageSize, items });
+                _logService.LogInfo(
+                    $"Image search q='{q}', page={page}, pageSize={pageSize} -> returned {items.Count} of total {total}.",
+                    null,
+                    "ImagesController");
+
+                return Ok(new { total, page, pageSize, items });
+            }
+            catch (Exception ex)
+            {
+                _logService.LogError(
+                    $"Error in Image Search q='{q}': {ex.Message}",
+                    null,
+                    "ImagesController",
+                    ex.ToString());
+
+                return BadRequest(ex.Message);
+            }
         }
 
         public sealed class UploadImageForm
@@ -47,47 +70,73 @@ namespace WebApi.Controllers
         [Authorize(Roles = "Admin")]
         [HttpPost]
         [Consumes("multipart/form-data")]
-        [RequestSizeLimit(20_000_000)] // 20 MB
+        [RequestSizeLimit(20_000_000)]
         public async Task<IActionResult> Upload([FromForm] UploadImageForm form)
         {
-            var file = form.File;
-
-            if (file == null || file.Length == 0)
-                return BadRequest("No file uploaded.");
-
-            var allowed = new[] { "image/png", "image/jpeg", "image/webp" };
-            if (!allowed.Contains(file.ContentType))
-                return BadRequest("Only PNG, JPEG or WEBP allowed.");
-
-            var webRoot = _env.WebRootPath;
-            if (string.IsNullOrWhiteSpace(webRoot))
-                webRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-
-            var uploadsRoot = Path.Combine(webRoot, "uploads");
-            Directory.CreateDirectory(uploadsRoot);
-
-            var ext = Path.GetExtension(file.FileName);
-            var newName = $"{Guid.NewGuid():N}{ext}";
-            var physicalPath = Path.Combine(uploadsRoot, newName);
-
-            await using (var fs = System.IO.File.Create(physicalPath))
+            try
             {
-                await file.CopyToAsync(fs);
+                var file = form.File;
+
+                if (file == null || file.Length == 0)
+                {
+                    _logService.LogWarn("Upload failed: no file uploaded.", null, "ImagesController");
+                    return BadRequest("No file uploaded.");
+                }
+
+                var allowed = new[] { "image/png", "image/jpeg", "image/webp" };
+                if (!allowed.Contains(file.ContentType))
+                {
+                    _logService.LogWarn($"Upload failed: invalid contentType '{file.ContentType}'.", null, "ImagesController");
+                    return BadRequest("Only PNG, JPEG or WEBP allowed.");
+                }
+
+                var webRoot = _env.WebRootPath;
+                if (string.IsNullOrWhiteSpace(webRoot))
+                    webRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+
+                var uploadsRoot = Path.Combine(webRoot, "uploads");
+                Directory.CreateDirectory(uploadsRoot);
+
+                var ext = Path.GetExtension(file.FileName);
+                var newName = $"{Guid.NewGuid():N}{ext}";
+                var physicalPath = Path.Combine(uploadsRoot, newName);
+
+                await using (var fs = System.IO.File.Create(physicalPath))
+                {
+                    await file.CopyToAsync(fs);
+                }
+
+                var image = new Image
+                {
+                    FileName = file.FileName,
+                    ContentType = file.ContentType,
+                    Length = file.Length,
+                    StoragePathOrUrl = $"/uploads/{newName}",
+                    UploadedAt = DateTime.UtcNow
+                };
+
+                var id = _service.Create(image);
+
+                var baseUrl = $"{Request.Scheme}://{Request.Host}";
+                var url = baseUrl + image.StoragePathOrUrl;
+
+                _logService.LogInfo(
+                    $"Admin uploaded image id={id}, file='{file.FileName}', contentType='{file.ContentType}', length={file.Length}, url='{image.StoragePathOrUrl}'.",
+                    null,
+                    "ImagesController");
+
+                return Ok(new { id, url });
             }
-
-            var image = new Image
+            catch (Exception ex)
             {
-                FileName = file.FileName,
-                ContentType = file.ContentType,
-                Length = file.Length,
-                StoragePathOrUrl = $"/uploads/{newName}",
-                UploadedAt = DateTime.UtcNow
-            };
+                _logService.LogError(
+                    $"Error in Upload: {ex.Message}",
+                    null,
+                    "ImagesController",
+                    ex.ToString());
 
-            var id = _service.Create(image);
-
-            var baseUrl = $"{Request.Scheme}://{Request.Host}";
-            return Ok(new { id, url = baseUrl + image.StoragePathOrUrl });
+                return BadRequest(ex.Message);
+            }
         }
 
         [Authorize(Roles = "Admin")]
@@ -97,10 +146,13 @@ namespace WebApi.Controllers
             try
             {
                 _service.Delete(id);
+
+                _logService.LogInfo($"Admin deleted image id={id}.", null, "ImagesController");
                 return Ok();
             }
             catch (Exception ex)
             {
+                _logService.LogError($"Error in Delete image id={id}: {ex.Message}", null, "ImagesController", ex.ToString());
                 return BadRequest(ex.Message);
             }
         }

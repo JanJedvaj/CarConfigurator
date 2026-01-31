@@ -16,7 +16,6 @@ namespace DAL.Repositories.Users
         User? GetByUsername(string username);
         User? GetByEmail(string email);
 
-        // Validacije (jako korisno za registraciju)
         bool ExistsUsername(string username);
         bool ExistsEmail(string email);
     }

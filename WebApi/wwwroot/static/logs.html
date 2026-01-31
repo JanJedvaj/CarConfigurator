@@ -1,0 +1,181 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Logs</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 980px;
+            margin: 40px auto;
+            padding: 0 16px;
+        }
+
+        .row {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        select, button {
+            padding: 8px 10px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            vertical-align: top;
+        }
+
+        th {
+            background: #f6f6f6;
+            text-align: left;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .muted {
+            color: #666;
+        }
+
+        .err {
+            color: #b00020;
+            margin-top: 10px;
+        }
+
+        code {
+            background: #f6f6f6;
+            padding: 2px 6px;
+            border-radius: 6px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="topbar">
+        <h2>API Logs</h2>
+        <button id="btnLogout">Logout</button>
+    </div>
+
+    <div class="row">
+        <label>Show last:</label>
+        <select id="count">
+            <option value="10">10</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+        </select>
+
+        <button id="btnRefresh">Refresh</button>
+
+        <span class="muted">Total saved logs: <b id="total">?</b></span>
+    </div>
+
+    <div id="err" class="err"></div>
+
+    <table>
+        <thead>
+            <tr>
+                <th style="width:120px;">Id</th>
+                <th style="width:220px;">Timestamp</th>
+                <th style="width:120px;">Level</th>
+                <th>Message</th>
+            </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+    </table>
+
+    <script>
+  const token = localStorage.getItem("jwt");
+  const err = document.getElementById("err");
+  const tbody = document.getElementById("tbody");
+
+  function kickToLogin() {
+    localStorage.removeItem("jwt");
+    window.location.href = "login.html";
+  }
+
+  if (!token) {
+    kickToLogin();
+  }
+
+  document.getElementById("btnLogout").addEventListener("click", () => {
+    kickToLogin();
+  });
+
+  document.getElementById("btnRefresh").addEventListener("click", () => load());
+
+  document.getElementById("count").addEventListener("change", () => load());
+
+  async function apiGet(url) {
+    const res = await fetch(url, {
+      headers: { "Authorization": "Bearer " + token }
+    });
+    return res;
+  }
+
+  async function load() {
+    err.textContent = "";
+    tbody.innerHTML = "<tr><td colspan='4' class='muted'>Loading...</td></tr>";
+
+    try {
+      // count endpoint
+      const countRes = await apiGet("/api/logs/count");
+      if (countRes.status === 401) return kickToLogin();
+      if (!countRes.ok) throw new Error("Cannot read logs count.");
+      document.getElementById("total").textContent = await countRes.text();
+
+      // get/N endpoint
+      const n = document.getElementById("count").value;
+      const logsRes = await apiGet("/api/logs/get/" + n);
+      if (logsRes.status === 401) return kickToLogin();
+      if (!logsRes.ok) throw new Error("Cannot read logs list.");
+
+      const logs = await logsRes.json();
+
+      tbody.innerHTML = "";
+      if (!logs || logs.length === 0) {
+        tbody.innerHTML = "<tr><td colspan='4' class='muted'>No logs.</td></tr>";
+        return;
+      }
+
+      for (const l of logs) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${l.id ?? ""}</td>
+          <td>${l.timestamp ?? ""}</td>
+          <td>${l.level ?? ""}</td>
+          <td>${escapeHtml(l.message ?? "")}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+    } catch (e) {
+      tbody.innerHTML = "";
+      err.textContent = e.message || "Error.";
+    }
+  }
+
+  function escapeHtml(s) {
+    return s.replaceAll("&","&amp;")
+            .replaceAll("<","&lt;")
+            .replaceAll(">","&gt;");
+  }
+
+  load();
+    </script>
+
+</body>
+</html>
