@@ -72,7 +72,7 @@ namespace DAL.Repositories.Configurations
             _context.SaveChanges();
         }
 
-        //Configuration items (M-N)
+        //Configuration items M-N
 
         public void AddComponent(int configurationId, int componentId)
         {
@@ -119,7 +119,7 @@ namespace DAL.Repositories.Configurations
             _context.SaveChanges();
         }
 
-        //Business helpers
+        //Biznis helpers
 
         public decimal RecalculateTotalPrice(int configurationId)
         {

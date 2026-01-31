@@ -72,7 +72,7 @@ namespace DAL.Repositories.Compatibilities
             _context.SaveChanges();
         }
 
-        //Business metode 
+        //Biznis metode 
 
         public bool IsAllowed(int componentId, int compatibleWithComponentId)
         {

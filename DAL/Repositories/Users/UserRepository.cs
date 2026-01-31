@@ -49,7 +49,6 @@ namespace DAL.Repositories.Users
             if (user == null)
                 return;
 
-            // Ako user ima konfiguracije, brišemo ih (ON DELETE CASCADE je u bazi,
 
             if (user.CarConfigurations != null && user.CarConfigurations.Any())
             {
