@@ -14,12 +14,12 @@ namespace DAL.Repositories.Configurations
         void Update(CarConfiguration configuration);
         void Delete(int id);
 
-        //Configuration items (M-N)
+        //Configuration items M-N
         void AddComponent(int configurationId, int componentId);
         void RemoveComponent(int configurationId, int componentId);
         void ClearComponents(int configurationId);
 
-        //Business helpers
+        //Biznis helpers
         decimal RecalculateTotalPrice(int configurationId);
     }
 }
