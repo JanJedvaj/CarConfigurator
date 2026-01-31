@@ -1,0 +1,111 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Logs Login</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 520px;
+            margin: 40px auto;
+            padding: 0 16px;
+        }
+
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 16px;
+        }
+
+        label {
+            display: block;
+            margin-top: 12px;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            margin-top: 6px;
+        }
+
+        button {
+            margin-top: 16px;
+            padding: 10px 14px;
+            width: 100%;
+        }
+
+        .err {
+            color: #b00020;
+            margin-top: 12px;
+        }
+
+        .muted {
+            color: #666;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <h2>Log Viewer – Login</h2>
+
+    <div class="card">
+        <label for="userNameOrEmail">Username or Email</label>
+        <input id="userNameOrEmail" placeholder="e.g. admin or admin@mail.com" />
+
+        <label for="password">Password</label>
+        <input id="password" type="password" placeholder="••••••••" />
+
+        <button id="btnLogin" type="button">Login</button>
+
+        <div id="err" class="err" role="alert" aria-live="polite"></div>
+    </div>
+
+    <script>
+        // Ako je već logiran, prebaci na logs
+        if (localStorage.getItem("jwt")) {
+            globalThis.location.href = "logs.html";
+        }
+
+        const err = document.getElementById("err");
+
+        document.getElementById("btnLogin").addEventListener("click", async () => {
+            err.textContent = "";
+
+            const userNameOrEmail = document.getElementById("userNameOrEmail").value.trim();
+            const password = document.getElementById("password").value;
+
+            if (!userNameOrEmail || !password) {
+                err.textContent = "Please enter username/email and password.";
+                return;
+            }
+
+            try {
+                const res = await fetch("/api/auth/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ userNameOrEmail, password })
+                });
+
+                if (!res.ok) {
+                    const text = await res.text();
+                    err.textContent = text || "Login failed.";
+                    return;
+                }
+
+                // Tvoj API vraća token kao string
+                const token = await res.text();
+                // token zna doći s navodnicima ako je JSON string, očisti:
+                const cleaned = token.replace(/^"|"$/g, "");
+
+                localStorage.setItem("jwt", cleaned);
+                globalThis.location.href = "logs.html";
+            } catch (e) {
+                console.error("Login request failed:", e);
+                err.textContent = "Network error.";
+            }
+        });
+    </script>
+</body>
+</html>
